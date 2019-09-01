@@ -1,15 +1,25 @@
-These programs are clients for the System Fusion networking now built into the MMDVM Host.
+I want to update YSFGateway from good work of because it is somewhat not outdated. 
+I hope i can solve several minor problems with code.
 
-The Parrot can be used as a functional replacement for the built-in parrot that was removed from the MMDVM Host when the networking was added. The Parrot is very simple minded and can only handle one client at a time and is therefore not suitable for use as a shared resource via the Internet.
+The changes are:
 
-The Gateway allows for use of Yaesu Wires-X commands from the radio to control the listing and access to the various reflectors (rooms in Wires-X parlance). It optionally sends System Fusion GPS information to aprs.fi.
+- Added choice of mode changing Reflector from handhel from 1 to , so 1=Parrot, 2=YSF, 3=FCS, 4=DMR, 5=NXDN, 6=P25
+- When mode is selected you can select reflector from Handhel with number based in the selected Domain only if number > 6 and number <> 0.
+- YSFGateway manages all system reflector, so when using YSF only YSF reflector shows when inquire ALL, DMR only reflectors show when inquire ALL, and so on...
+- YSFGatway controls change of reflector or TG, only using syntesized passthrough for NXDN or P25.
+- Full YSF2DMR included inside YSFGateway :-)
+- BEACON included with choice to record DV_MODE2 speech.
+- Added GPS aprs.if packets GPS information rewriting in all modes. 
+- Added buffer and DATA regeenerating on YSF and FCS that enable on the fly change of destiny and GPS information.
+- Adedd option to lock reflector.
+- Automatic Startup on any mode.
+- Automatic revert on any mode.
+- Pass data to network only if message or photo kind. WiresX processing decides if it go to network or non, so we make a buffer to delay decision. It allows sending photo and messagin through YSF network. But as Modem can't handle photo packets we need to regenerate lost packets, so photo transfer is not jet operational.
+- Many many options...
 
-The Reflector retransmits any received System Fusion data to other MMDVM Hosts or Gateways logged into the reflector at the time. It also provides status information to potential clients.
+I dont have much time to do coding, so I hope this project soon improve.
 
-The Gateway and Reflector have ini files that contain the parameters for running the software. The filename of the ini file is passed as a parameter on the command line. The Parrot takes the UDP port number to listen on as an argument.
-
-The MMDVM .ini file should have the IP address and port number of the client in the [System Fusion Network] settings.
-
-They build on 32-bit and 64-bit Linux as well as on Windows using Visual Studio 2017 on x86 and x64.
+Manuel
+EA7EE
 
 This software is licenced under the GPL v2 and is intended for amateur and educational use only. Use of this software for commercial purposes is strictly forbidden.
