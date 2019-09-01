@@ -181,7 +181,7 @@ WX_STATUS CDTMF::validate() const
 				return WXS_NONE;
 		}
 
-		return WXS_CONNECT_FCS;
+		return WXS_CONNECT;
 	} else if (length == 4U && first == 'A') {
 		for (unsigned int i = 1U; i < 4U; i++) {
 			char c = m_command.at(i);
@@ -189,7 +189,7 @@ WX_STATUS CDTMF::validate() const
 				return WXS_NONE;
 		}
 
-		return WXS_CONNECT_FCS;
+		return WXS_CONNECT;
 	} else if (length == 6U && first == '#') {
 		for (unsigned int i = 1U; i < 6U; i++) {
 			char c = m_command.at(i);
@@ -200,7 +200,7 @@ WX_STATUS CDTMF::validate() const
 		if (m_command == "#99999")
 			return WXS_DISCONNECT;
 
-		return WXS_CONNECT_YSF;
+		return WXS_CONNECT;
 	}
 
 	return WXS_NONE;

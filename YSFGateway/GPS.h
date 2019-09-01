@@ -1,5 +1,7 @@
 /*
-*   Copyright (C) 2016,2017,2018 by Jonathan Naylor G4KLX
+*   Copyright (C) 2016,2017 by Jonathan Naylor G4KLX
+*   Copyright (C) 2019 by Manuel Sanchez EA7EE
+*   Copyright (C) 2018 by Andy Uribe CA6JAU
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -25,17 +27,25 @@
 
 class CGPS {
 public:
-	CGPS(CAPRSWriter* writer);
+	CGPS(CAPRSWriter *writer);
 	~CGPS();
 
-	void data(const unsigned char* source, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft);
+	bool open();
+
+	void data(const unsigned char* source, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned int type, unsigned int tg_qrv);
+
+	void clock(unsigned int ms);
 
 	void reset();
 
+	void close();
+
 private:
-	CAPRSWriter*   m_writer;
+	CAPRSWriter   * m_writer;
 	unsigned char* m_buffer;
 	bool           m_sent;
+	unsigned int   m_tg_qrv;
+	unsigned int   m_type;
 
 	void transmitGPS(const unsigned char* source);
 };

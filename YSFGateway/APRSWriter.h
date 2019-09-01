@@ -40,18 +40,18 @@
 
 class CAPRSWriter {
 public:
-	CAPRSWriter(const std::string& callsign, const std::string& rptSuffix, const std::string& password, const std::string& address, unsigned int port, const std::string& suffix);
+	CAPRSWriter(const std::string& callsign, const std::string& password, const std::string& address, unsigned int port, bool follow);
 	~CAPRSWriter();
 
 	bool open();
 
-	void setInfo(unsigned int txFrequency, unsigned int rxFrequency, const std::string& desc);
+	void setInfo(const std::string& node_callsign, unsigned int txFrequency, unsigned int rxFrequency, const std::string& desc, const std::string& icon, const std::string& beacon_text, int beacon_time, bool follow);
 
 	void setStaticLocation(float latitude, float longitude, int height);
 
 	void setMobileLocation(const std::string& address, unsigned int port);
 
-	void write(const unsigned char* source, const char* type, unsigned char radio, float latitude, float longitude);
+	void write(const unsigned char* source, const char* type, unsigned char radio, float latitude, float longitude, unsigned int tg_type, unsigned int tg_qrv);
 
 	void clock(unsigned int ms);
 
@@ -61,13 +61,19 @@ private:
 	CAPRSWriterThread* m_thread;
 	CTimer             m_idTimer;
 	std::string        m_callsign;
+	std::string        m_server;
 	unsigned int       m_txFrequency;
 	unsigned int       m_rxFrequency;
 	float              m_latitude;
 	float              m_longitude;
+	float              fm_latitude;
+	float              fm_longitude;
+	bool			   m_follow;	
 	int                m_height;
 	std::string        m_desc;
-	std::string        m_suffix;
+	std::string        m_icon;
+	std::string        m_beacon_text;
+	std::string		   m_node_callsign;	
 	in_addr            m_mobileGPSAddress;
 	unsigned int       m_mobileGPSPort;
 	CUDPSocket*        m_socket;

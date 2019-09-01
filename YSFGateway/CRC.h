@@ -1,5 +1,6 @@
 /*
  *   Copyright (C) 2015,2016 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2018 by Andy Uribe CA6JAU
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -22,9 +23,17 @@
 class CCRC
 {
 public:
-	static void addCCITT16(unsigned char* in, unsigned int length);
-	static bool checkCCITT16(const unsigned char* in, unsigned int length);
+	static bool checkFiveBit(bool* in, unsigned int tcrc);
+	static void encodeFiveBit(const bool* in, unsigned int& tcrc);
 
+	static void addCCITT161(unsigned char* in, unsigned int length);
+	static void addCCITT162(unsigned char* in, unsigned int length);
+
+	static bool checkCCITT161(const unsigned char* in, unsigned int length);
+	static bool checkCCITT162(const unsigned char* in, unsigned int length);
+
+	static unsigned char crc8(const unsigned char* in, unsigned int length);
+	
 	static unsigned char addCRC(const unsigned char* in, unsigned int length);
 };
 

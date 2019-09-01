@@ -143,7 +143,6 @@ bool CYSFReflectors::load()
 
 					refl->m_name.resize(16U, ' ');
 					refl->m_desc.resize(14U, ' ');
-
 					m_newReflectors.push_back(refl);
 				}
 			}

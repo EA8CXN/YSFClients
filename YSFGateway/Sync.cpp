@@ -1,5 +1,6 @@
 /*
  *   Copyright (C) 2015,2016 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2018 by Andy Uribe CA6JAU
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -18,15 +19,43 @@
 
 #include "Sync.h"
 
+#include "DMRDefines.h"
 #include "YSFDefines.h"
 
 #include <cstdio>
 #include <cassert>
 #include <cstring>
 
-void CSync::add(unsigned char* data)
+void CSync::addDMRDataSync(unsigned char* data, bool duplex)
+{
+	assert(data != NULL);
+
+	if (duplex) {
+		for (unsigned int i = 0U; i < 7U; i++)
+			data[i + 13U] = (data[i + 13U] & ~SYNC_MASK[i]) | BS_SOURCED_DATA_SYNC[i];
+	} else {
+		for (unsigned int i = 0U; i < 7U; i++)
+			data[i + 13U] = (data[i + 13U] & ~SYNC_MASK[i]) | MS_SOURCED_DATA_SYNC[i];
+	}
+}
+
+void CSync::addDMRAudioSync(unsigned char* data, bool duplex)
+{
+	assert(data != NULL);
+
+	if (duplex) {
+		for (unsigned int i = 0U; i < 7U; i++)
+			data[i + 13U] = (data[i + 13U] & ~SYNC_MASK[i]) | BS_SOURCED_AUDIO_SYNC[i];
+	} else {
+		for (unsigned int i = 0U; i < 7U; i++)
+			data[i + 13U] = (data[i + 13U] & ~SYNC_MASK[i]) | MS_SOURCED_AUDIO_SYNC[i];
+	}
+}
+
+void CSync::addYSFSync(unsigned char* data)
 {
 	assert(data != NULL);
 
 	::memcpy(data, YSF_SYNC_BYTES, YSF_SYNC_LENGTH_BYTES);
 }
+

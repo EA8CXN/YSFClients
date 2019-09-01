@@ -1,5 +1,5 @@
 /*
-*   Copyright (C) 2016 by Jonathan Naylor G4KLX
+*   Copyright (C) 2016,2017 by Jonathan Naylor G4KLX
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -26,17 +26,32 @@ public:
 	CYSFPayload();
 	~CYSFPayload();
 
-	bool readVDMode1Data(const unsigned char* data, unsigned char* dt);
+	bool processHeaderData(unsigned char* bytes);
 
+	void writeVDMode2Data(unsigned char* data, const unsigned char* dt);
+	bool readVDMode1Data(const unsigned char* data, unsigned char* dt);
 	bool readVDMode2Data(const unsigned char* data, unsigned char* dt);
 
-	bool readDataFRModeData1(const unsigned char* data, unsigned char* dt);
-	bool readDataFRModeData2(const unsigned char* data, unsigned char* dt);
+	void writeHeader(unsigned char* data, const unsigned char* csd1, const unsigned char* csd2);
 
 	void writeDataFRModeData1(const unsigned char* dt, unsigned char* data);
 	void writeDataFRModeData2(const unsigned char* dt, unsigned char* data);
+	bool readDataFRModeData1(const unsigned char* data, unsigned char* dt);
+	bool readDataFRModeData2(const unsigned char* data, unsigned char* dt);
+
+	std::string getSource();
+	std::string getDest();
+
+	void setUplink(const std::string& callsign);
+	void setDownlink(const std::string& callsign);
+
+	void reset();
 
 private:
+	unsigned char* m_uplink;
+	unsigned char* m_downlink;
+	unsigned char* m_source;
+	unsigned char* m_dest;
 };
 
 #endif

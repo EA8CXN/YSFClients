@@ -49,7 +49,7 @@ m_clientName("YSFGateway")
 	assert(!password.empty());
 	assert(!address.empty());
 	assert(port > 0U);
-
+	
 	m_username.resize(CALLSIGN_LENGTH, ' ');
 	m_username.erase(std::find_if(m_username.rbegin(), m_username.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), m_username.end());
 	std::transform(m_username.begin(), m_username.end(), m_username.begin(), ::toupper);
@@ -57,7 +57,7 @@ m_clientName("YSFGateway")
 
 CAPRSWriterThread::CAPRSWriterThread(const std::string& callsign, const std::string& password, const std::string& address, unsigned int port, const std::string& filter, const std::string& clientName) :
 CThread(),
-m_username(callsign),
+m_username(),
 m_password(password),
 m_socket(address, port),
 m_queue(20U, "APRS Queue"),

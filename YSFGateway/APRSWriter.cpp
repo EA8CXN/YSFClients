@@ -1,5 +1,7 @@
 /*
  *   Copyright (C) 2010-2014,2016,2017,2018 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2019 by Manuel Sanchez EA7EE
+ *   Copyright (C) 2018 by Andy Uribe CA6JAU 
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -25,17 +27,18 @@
 #include <cstring>
 #include <cmath>
 
-CAPRSWriter::CAPRSWriter(const std::string& callsign, const std::string& rptSuffix, const std::string& password, const std::string& address, unsigned int port, const std::string& suffix) :
+CAPRSWriter::CAPRSWriter(const std::string& callsign, const std::string& password, const std::string& address, unsigned int port, bool follow) :
 m_thread(NULL),
-m_idTimer(1000U),
+m_idTimer(1000U, 20U * 60U),		// 20 minutes
 m_callsign(callsign),
+m_server(),
 m_txFrequency(0U),
 m_rxFrequency(0U),
 m_latitude(0.0F),
 m_longitude(0.0F),
+m_follow(follow),
 m_height(0),
 m_desc(),
-m_suffix(suffix),
 m_mobileGPSAddress(),
 m_mobileGPSPort(0U),
 m_socket(NULL)
@@ -44,24 +47,21 @@ m_socket(NULL)
 	assert(!password.empty());
 	assert(!address.empty());
 	assert(port > 0U);
-
-	if (!rptSuffix.empty()) {
-		m_callsign.append("-");
-		m_callsign.append(rptSuffix.substr(0U, 1U));
-	}
-
-	m_thread = new CAPRSWriterThread(m_callsign, password, address, port);
+	m_thread = new CAPRSWriterThread(callsign, password, address, port);
 }
 
 CAPRSWriter::~CAPRSWriter()
 {
 }
 
-void CAPRSWriter::setInfo(unsigned int txFrequency, unsigned int rxFrequency, const std::string& desc)
+void CAPRSWriter::setInfo(const std::string& node_callsign, unsigned int txFrequency, unsigned int rxFrequency, const std::string& desc, const std::string& icon, const std::string& beacon_text, int beacon_time, bool follow)
 {
 	m_txFrequency = txFrequency;
 	m_rxFrequency = rxFrequency;
 	m_desc        = desc;
+	m_server	  = node_callsign;
+	m_icon		  = icon;
+	m_beacon_text = beacon_text;
 }
 
 void CAPRSWriter::setStaticLocation(float latitude, float longitude, int height)
@@ -103,22 +103,35 @@ bool CAPRSWriter::open()
 	return m_thread->start();
 }
 
-void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned char radio, float fLatitude, float fLongitude)
+void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned char radio, float fLatitude, float fLongitude, unsigned int tg_type, unsigned int tg_qrv)
 {
+	char callsign[15U];
+	char suffix[3];
+	char s_type[10];
+	
 	assert(source != NULL);
 	assert(type != NULL);
 
-	char callsign[15U];
+	
+	strcpy(callsign, (const char *)source);
+	unsigned int i=0;
+	while ((callsign[i]!=' ') && (i<strlen(callsign))) i++;
+	callsign[i]=0;	
+	
+	if (m_follow && (strcmp(callsign,m_node_callsign.c_str())==0)) {
+		LogMessage("Catching %s position.",m_node_callsign.c_str());
+		fm_latitude = fLatitude;
+		fm_longitude = fLongitude;
+	} else {
+		fm_latitude = 0;
+		fm_longitude = 0;	
+	}
+
 	::memcpy(callsign, source, YSF_CALLSIGN_LENGTH);
 	callsign[YSF_CALLSIGN_LENGTH] = 0x00U;
 
 	size_t n = ::strspn(callsign, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
 	callsign[n] = 0x00U;
-
-	if (!m_suffix.empty()) {
-		::strcat(callsign, "-");
-		::strcat(callsign, m_suffix.substr(0U, 1U).c_str());
-	}
 
 	double tempLat = ::fabs(fLatitude);
 	double tempLong = ::fabs(fLongitude);
@@ -140,39 +153,74 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 	case 0x24U:
 	case 0x28U:
 		symbol = '[';
+		strcpy(suffix, "-7");		
 		break;
 	case 0x25U:
 	case 0x29U:
 		symbol = '>';
+		strcpy(suffix, "-9");		
 		break;
 	case 0x26U:
 		symbol = 'r';
+		strcpy(suffix, "-1");		
 		break;
+	case 0x27U:
+		symbol = '-';
+		strcpy(suffix, "-2");
+		break;			
 	default:
 		symbol = '-';
+		strcpy(suffix, "-2");		
+		break;
+	}
+
+	switch (tg_type) {
+		case 1U:
+		strcpy(s_type, "YSF ");		
+		break;		
+		case 2U:
+		strcpy(s_type, "FCS ");		
+		break;
+		case 3U:
+		strcpy(s_type, "DMR TG-");		
+		break;
+		case 4U:
+		strcpy(s_type, "P25 ");		
+		break;
+		case 5U:
+		strcpy(s_type, "NXDN ");		
+		break;
+		default:
+		strcpy(s_type, " ");		
 		break;
 	}
 
 	char output[300U];
-	::sprintf(output, "%s>APDPRS,C4FM*,qAR,%s:!%s%c/%s%c%c %s via MMDVM",
-		callsign, m_callsign.c_str(),
+	::sprintf(output, "%s%s>APDPRS,C4FM*,qAR,%s:!%s%c/%s%c%c %s QRV %s%d via MMDVM",
+		callsign, suffix, m_callsign.c_str(),
 		lat, (fLatitude < 0.0F) ? 'S' : 'N',
 		lon, (fLongitude < 0.0F) ? 'W' : 'E',
-		symbol, type);
+		symbol, type, s_type, tg_qrv);
 
 	m_thread->write(output);
 }
 
+bool first_time=true;
+
 void CAPRSWriter::clock(unsigned int ms)
 {
 	m_idTimer.clock(ms);
+
+    if ((m_idTimer.getTimer()>10U) && first_time) {
+		sendIdFrameFixed();
+		first_time=false;
+	}
 
 	if (m_socket != NULL) {
 		if (m_idTimer.hasExpired()) {
 			pollGPS();
 			m_idTimer.start();
 		}
-
 		sendIdFrameMobile();
 	} else {
 		if (m_idTimer.hasExpired()) {
@@ -208,31 +256,19 @@ void CAPRSWriter::sendIdFrameFixed()
 	if (m_latitude == 0.0F && m_longitude == 0.0F)
 		return;
 
-	char desc[200U];
-	if (m_txFrequency != 0U) {
-		float offset = float(int(m_rxFrequency) - int(m_txFrequency)) / 1000000.0F;
-		::sprintf(desc, "MMDVM Voice %.5LfMHz %c%.4lfMHz%s%s",
-			(long double)(m_txFrequency) / 1000000.0F,
-			offset < 0.0F ? '-' : '+',
-			::fabs(offset), m_desc.empty() ? "" : ", ", m_desc.c_str());
-	} else {
-		::sprintf(desc, "MMDVM Voice%s%s", m_desc.empty() ? "" : ", ", m_desc.c_str());
+	double tempLat, tempLong;
+
+	if (fm_latitude == 0.0F) tempLat  = ::fabs(m_latitude);
+	else {
+		//LogMessage("lat: %f",fm_latitude);
+		tempLat  = ::fabs(fm_latitude);
 	}
 
-	const char* band = "4m";
-	if (m_txFrequency >= 1200000000U)
-		band = "1.2";
-	else if (m_txFrequency >= 420000000U)
-		band = "440";
-	else if (m_txFrequency >= 144000000U)
-		band = "2m";
-	else if (m_txFrequency >= 50000000U)
-		band = "6m";
-	else if (m_txFrequency >= 28000000U)
-		band = "10m";
-
-	double tempLat  = ::fabs(m_latitude);
-	double tempLong = ::fabs(m_longitude);
+	if (fm_longitude == 0.0F) tempLong = ::fabs(m_longitude);
+	else {
+		//LogMessage("lon: %f",fm_longitude);
+		tempLong = ::fabs(fm_longitude);
+	}
 
 	double latitude  = ::floor(tempLat);
 	double longitude = ::floor(tempLong);
@@ -246,21 +282,18 @@ void CAPRSWriter::sendIdFrameFixed()
 	char lon[20U];
 	::sprintf(lon, "%08.2lf", longitude);
 
-	std::string server = m_callsign;
-	size_t pos = server.find_first_of('-');
-	if (pos == std::string::npos)
-		server.append("-S");
-	else
-		server.append("S");
-
 	char output[500U];
-	::sprintf(output, "%s>APDG03,TCPIP*,qAC,%s:!%s%cD%s%c&/A=%06.0f%s %s",
-		m_callsign.c_str(), server.c_str(),
-		lat, (m_latitude < 0.0F)  ? 'S' : 'N',
-		lon, (m_longitude < 0.0F) ? 'W' : 'E',
-		float(m_height) * 3.28F, band, desc);
+	char mobile[10];
+	if (fm_latitude == 0.0F) strcpy(mobile,"");
+	else strcpy(mobile," /mobile");	
+	::sprintf(output, "%s>APDG03,TCPIP*,qAC,%s:!%s%c%c%s%c%c%s%s",
+		m_callsign.c_str(), m_server.c_str(),
+		lat, (m_latitude < 0.0F)  ? 'S' : 'N',m_icon.at(0),
+		lon, (m_longitude < 0.0F) ? 'W' : 'E',m_icon.at(1),
+		m_beacon_text.c_str(), mobile);
 
 	m_thread->write(output);
+	m_idTimer.start();	
 }
 
 void CAPRSWriter::sendIdFrameMobile()
@@ -292,29 +325,6 @@ void CAPRSWriter::sendIdFrameMobile()
 	float rawLongitude = ::atof(pLongitude);
 	float rawAltitude  = ::atof(pAltitude);
 
-	char desc[200U];
-	if (m_txFrequency != 0U) {
-		float offset = float(int(m_rxFrequency) - int(m_txFrequency)) / 1000000.0F;
-		::sprintf(desc, "MMDVM Voice %.5LfMHz %c%.4lfMHz%s%s",
-			(long double)(m_txFrequency) / 1000000.0F,
-			offset < 0.0F ? '-' : '+',
-			::fabs(offset), m_desc.empty() ? "" : ", ", m_desc.c_str());
-	} else {
-		::sprintf(desc, "MMDVM Voice%s%s", m_desc.empty() ? "" : ", ", m_desc.c_str());
-	}
-
-	const char* band = "4m";
-	if (m_txFrequency >= 1200000000U)
-		band = "1.2";
-	else if (m_txFrequency >= 420000000U)
-		band = "440";
-	else if (m_txFrequency >= 144000000U)
-		band = "2m";
-	else if (m_txFrequency >= 50000000U)
-		band = "6m";
-	else if (m_txFrequency >= 28000000U)
-		band = "10m";
-
 	double tempLat  = ::fabs(rawLatitude);
 	double tempLong = ::fabs(rawLongitude);
 
@@ -330,18 +340,11 @@ void CAPRSWriter::sendIdFrameMobile()
 	char lon[20U];
 	::sprintf(lon, "%08.2lf", longitude);
 
-	std::string server = m_callsign;
-	size_t pos = server.find_first_of('-');
-	if (pos == std::string::npos)
-		server.append("-S");
-	else
-		server.append("S");
-
 	char output[500U];
-	::sprintf(output, "%s>APDG03,TCPIP*,qAC,%s:!%s%cD%s%c&",
-		m_callsign.c_str(), server.c_str(),
-		lat, (rawLatitude < 0.0F)  ? 'S' : 'N',
-		lon, (rawLongitude < 0.0F) ? 'W' : 'E');
+	::sprintf(output, "%s>APDG03,TCPIP*,qAC,%s:!%s%c%c%s%c%c",
+		m_callsign.c_str(), m_server.c_str(),
+		lat, (rawLatitude < 0.0F)  ? 'S' : 'N',m_icon.at(0),
+		lon, (rawLongitude < 0.0F) ? 'W' : 'E',m_icon.at(1));
 
 	if (pBearing != NULL && pVelocity != NULL) {
 		float rawBearing   = ::atof(pBearing);
@@ -350,7 +353,7 @@ void CAPRSWriter::sendIdFrameMobile()
 		::sprintf(output + ::strlen(output), "%03.0f/%03.0f", rawBearing, rawVelocity * 0.539957F);
 	}
 
-	::sprintf(output + ::strlen(output), "/A=%06.0f%s %s", float(rawAltitude) * 3.28F, band, desc);
+	::sprintf(output + ::strlen(output), "/A=%06.0f %s", float(rawAltitude) * 3.28F, m_beacon_text.c_str());
 
 	m_thread->write(output);
 }
