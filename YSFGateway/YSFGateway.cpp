@@ -915,7 +915,7 @@ void CYSFGateway::AMBE_write(unsigned char* buffer, unsigned char fi, unsigned c
 			m_conv.putYSFEOT();
 			m_ysfFrames = 0U;
 		} else if (fi == YSF_FI_COMMUNICATIONS) {
-			m_conv.putYSF(buffer + 35U);
+			m_conv.putYSF_Mode2(buffer + 35U,file);
 			m_ysfFrames++;
 		}
 	}	

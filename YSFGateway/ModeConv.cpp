@@ -756,6 +756,77 @@ void CModeConv::putYSF_Mode1(unsigned char* data, FILE *file) {
 }
 
 
+void CModeConv::putYSF_Mode2(unsigned char* data, FILE *file) {
+	assert(data != NULL);
+
+	data += YSF_SYNC_LENGTH_BYTES + YSF_FICH_LENGTH_BYTES;
+
+	unsigned int offset = 40U; // DCH(0)
+    unsigned char buf[40];
+	unsigned char pos=0;
+
+	// We have a total of 5 VCH sections, iterate through each
+	for (unsigned int j = 0U; j < 5U; j++, offset += 144U) {
+
+		unsigned char vch[13U];
+		unsigned int dat_a = 0U;
+		unsigned int dat_b = 0U;
+		unsigned int dat_c = 0U;
+
+		// Deinterleave
+		for (unsigned int i = 0U; i < 104U; i++) {
+			unsigned int n = INTERLEAVE_TABLE_26_4[i];
+			bool s = READ_BIT(data, offset + n);
+			WRITE_BIT(vch, i, s);
+		}
+
+		// "Un-whiten" (descramble)
+		for (unsigned int i = 0U; i < 13U; i++)
+			vch[i] ^= WHITENING_DATA[i];
+	
+		for (unsigned int i = 0U; i < 12U; i++) {
+			dat_a <<= 1U;
+			if (READ_BIT(vch, 3U*i + 1U))
+				dat_a |= 0x01U;;
+		}
+		
+		for (unsigned int i = 0U; i < 12U; i++) {
+			dat_b <<= 1U;
+			if (READ_BIT(vch, 3U*(i + 12U) + 1U))
+				dat_b |= 0x01U;;
+		}
+		
+		for (unsigned int i = 0U; i < 3U; i++) {
+			dat_c <<= 1U;
+			if (READ_BIT(vch, 3U*(i + 24U) + 1U))
+				dat_c |= 0x01U;;
+		}
+
+		for (unsigned int i = 0U; i < 22U; i++) {
+			dat_c <<= 1U;
+			if (READ_BIT(vch, i + 81U))
+				dat_c |= 0x01U;;
+		}
+		
+		buf[pos]=0U;
+		buf[pos+1]=(unsigned char)(dat_a>>4);
+		unsigned char tmp=(unsigned char)((dat_a<<4)&0xF0);
+		tmp=tmp|(unsigned char)((dat_b>>8)&0x0F);
+        buf[pos+2]=tmp;
+        buf[pos+3]=(unsigned char)(dat_b&0xFF);
+        buf[pos+4]=(unsigned char)((dat_c&0x1FE0000)>>17);
+        buf[pos+5]=(unsigned char)((dat_c&0x1FE00)>>9);
+        buf[pos+6]=(unsigned char)((dat_c&0x1FE)>>1);
+		buf[pos+7]=(unsigned char) (dat_c&0x01);
+		pos+=8;
+	}
+	
+    if (file) {
+		fwrite(buf,40U,1U,file);
+		//CUtils::dump(1U, "VCH V/D type 2:", buf, 40U);
+	} 
+}
+
 void CModeConv::putYSF(unsigned char* data)
 {
 	assert(data != NULL);

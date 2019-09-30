@@ -38,6 +38,7 @@ public:
 	void putDMRSilence(void);
 
 	void putYSF_Mode1(unsigned char* bytes, FILE *file);
+	void putYSF_Mode2(unsigned char* bytes, FILE *file);	
 	void putYSF(unsigned char* bytes);
 	void putDummyYSF();
 	void putYSFHeader();
