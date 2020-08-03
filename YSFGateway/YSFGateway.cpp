@@ -1336,9 +1336,9 @@ static bool first_time;
 			}
 			//LogMessage("RX Packet gid=%d, fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d.",m_gid,fi,dt,fn,ft,bn,bt);							
 			// only VD_MODE2 packets
-			if (dt==YSF_DT_DATA_FR_MODE) {
+			if ((dt==YSF_DT_DATA_FR_MODE) || (dt==YSF_DT_VOICE_FR_MODE)) {
 				// Data packets go direct to modem
-				CUtils::dump("YSF Data from Network",buffer,155U);
+				// CUtils::dump("YSF Data from Network",buffer,155U);
 				rtpNetwork->write(buffer);
 				//m_ysf_cnt++;
 				m_ysfWatch.start();		
