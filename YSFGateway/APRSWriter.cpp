@@ -152,7 +152,7 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 	switch (radio) {
 	case 0x24U:
 	case 0x28U:
-	case 0x30U			
+	case 0x30U:			
 		symbol = '[';
 		strcpy(suffix, "-7");		
 		break;
