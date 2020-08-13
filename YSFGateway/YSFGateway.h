@@ -165,7 +165,8 @@ private:
 	bool             m_xlxConnected;
 	CReflectors*     m_xlxReflectors;
 	unsigned int     m_xlxrefl;
-	FILE* 			 m_file_out;	
+	FILE* 			 m_file_out;
+	bool			 m_beacon;
 
 	void startupLinking();
 	std::string calculateLocator();

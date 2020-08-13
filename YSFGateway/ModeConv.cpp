@@ -1133,6 +1133,7 @@ char final_str[250];
 void CModeConv::LoadTable(unsigned int levelA, unsigned int levelB)
 {
 	int level_a,level_b;
+	char tmp_cad[20];
 	unsigned char i;
 	float pte;
 
@@ -1158,10 +1159,14 @@ void CModeConv::LoadTable(unsigned int levelA, unsigned int levelB)
 	}
 
 	strcpy(final_str,"AMBE Compression Table:");
-	sprintf(final_str,"%s %d",final_str,m_ctable[0]);
-	for (i=1;i<31;i++)
-		sprintf(final_str,"%s,%d",final_str,m_ctable[i]);
+	sprintf(tmp_cad,"%d,",m_ctable[0]);
+	strcat(final_str,tmp_cad);
+	for (i=1;i<31;i++) {
+		sprintf(final_str,"%d,",m_ctable[i]);
+		strcat(final_str,tmp_cad);
+	}
 
-	sprintf(final_str,"%s,%d.",final_str,m_ctable[31]);
+	sprintf(tmp_cad,"%d.",m_ctable[31]);
+	strcat(final_str,tmp_cad);
 	LogMessage(final_str);
 }

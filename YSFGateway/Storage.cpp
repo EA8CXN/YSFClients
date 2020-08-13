@@ -108,7 +108,7 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 	::memcpy(record,reg->gps_pos,18U);
 	::memcpy(record+18U,reg->token,6U);
 	::memcpy(record+24U,reg->time_recv,12U);	
-	::sprintf(tmp,"%05u",number);
+	::sprintf(tmp,"%05u",number%100000);
 	::memcpy(record+36U,tmp,5U);
 	::memcpy(record+41U,reg->type,3U);
 	::memcpy(record+44U,reg->time_send,12U);
@@ -523,7 +523,7 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const
 	m_reg_voice->number=number;
 	t = time(NULL);
 	tm = *localtime(&t);
-	sprintf(temp,"%02d%02d%02d%02d%02d%02d", (tm.tm_year + 1900)%100, 
+	sprintf(temp,"%02hu%0hu%02hu%02hu%02hu%02hu", (tm.tm_year + 1900)%100, 
 		tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
 	::memcpy(m_reg_voice->time_recv,temp,13U);
@@ -543,7 +543,7 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const
 void CWiresXStorage::VoiceEnd(unsigned int size) {
 	if (m_reg_voice) {
 		::LogMessage("Voice uploaded sucessfully.");		
-		::sprintf(m_reg_voice->type,"V%02u",(size/1000U)+1);
+		::sprintf(m_reg_voice->type,"V%02u",((size/1000U)+1)%100);
 		UpdateIndex(m_reg_voice);
 		delete m_reg_voice;
 		m_reg_voice = NULL;
@@ -555,7 +555,7 @@ void CWiresXStorage::PictureEnd(bool error) {
 		
 	if (!error) {
 		::LogMessage("Picture uploaded sucessfully");
-		::sprintf(m_reg_picture->type,"P%02u",(picture_final_size/1000U)+1);
+		::sprintf(m_reg_picture->type,"P%02u",((picture_final_size/1000U)+1)%100);
 		UpdateIndex(m_reg_picture);
 	}
 	else {
