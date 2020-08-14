@@ -88,6 +88,9 @@ const unsigned char dt2_temp[] = {0x00, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x1C, 0x20
 
 unsigned char m_gps_buffer[20U];	
 char beacon_name[]="/usr/local/sbin/beacon.amb";
+bool ysfNetworkEnabled;
+bool m_nxdnNetworkEnabled;
+bool m_p25NetworkEnabled;
 
 int main(int argc, char** argv)
 {
@@ -281,9 +284,11 @@ int CYSFGateway::run()
 	unsigned int reloadTime = m_conf.getNetworkReloadTime();
 	bool wiresXMakeUpper = m_conf.getWiresXMakeUpper();
 
-	bool ysfNetworkEnabled = m_conf.getYSFNetworkEnabled();
+	ysfNetworkEnabled = m_conf.getYSFNetworkEnabled();
 	m_fcsNetworkEnabled = m_conf.getFCSNetworkEnabled();
 	m_dmrNetworkEnabled = m_conf.getDMRNetworkEnabled();
+	m_nxdnNetworkEnabled = m_conf.getNXDNNetworkEnabled();
+	m_p25NetworkEnabled = m_conf.getP25NetworkEnabled();
 	
 	unsigned int lev_a = m_conf.getAMBECompA();
 	unsigned int lev_b = m_conf.getAMBECompB();
@@ -313,7 +318,9 @@ int CYSFGateway::run()
 	LogInfo("    No Change option: %s", m_NoChange ? "yes" : "no");
 	LogInfo("    YSF Enabled: %s", ysfNetworkEnabled ? "yes" : "no");
 	LogInfo("    FCS Enabled: %s", m_fcsNetworkEnabled ? "yes" : "no");
-	LogInfo("    DMR Enabled: %s", m_dmrNetworkEnabled ? "yes" : "no");		
+	LogInfo("    DMR Enabled: %s", m_dmrNetworkEnabled ? "yes" : "no");
+	LogInfo("    NXDN Enabled: %s", m_nxdnNetworkEnabled ? "yes" : "no");
+	LogInfo("    P25 Enabled: %s", m_p25NetworkEnabled ? "yes" : "no");			
 	LogInfo("    YSF Startup: %d", m_last_YSF_TG);
 	LogInfo("    FCS Startup: %d", m_last_FCS_TG);
 	LogInfo("    DMR Startup: %d", m_last_DMR_TG);
@@ -388,7 +395,7 @@ int CYSFGateway::run()
 	std::string file_fcs = m_conf.getFCSNetworkFile();
 	if (file_fcs.empty()) file_fcs = "/usr/local/etc/FCSHosts.txt";	
 	std::string file_dmr = m_conf.getDMRNetworkFile();
-	if (file_dmr.empty()) file_dmr = "/usr/local/etc/DMR_Hosts.txt";	
+	if (file_dmr.empty()) file_dmr = "/usr/local/etc/DMRHosts.txt";	
 	std::string file_nxdn = m_conf.getNXDNNetworkFile();
 	if (file_nxdn.empty()) file_nxdn = "/usr/local/etc/TGList_NXDN.txt";	
 	std::string file_p25 = m_conf.getP25NetworkFile();
@@ -422,13 +429,50 @@ int CYSFGateway::run()
 	m_p25Reflectors->reload();
 		
 	createGPS();
-	if (!m_conf.getAPRSAPIKey().empty()) 
-		m_APRS = new CAPRSReader(m_conf.getAPRSAPIKey(), m_conf.getAPRSRefresh());
-	else {
+	if (m_conf.getAPRSAPIKey().empty()) {
 		::memcpy(m_gps_buffer, dt1_temp, 10U);
 		::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
+		LogMessage("Geeting position from aprs.fi disabled. %s",m_conf.getAPRSAPIKey());		
 	}
-	startupLinking();
+	else {
+		m_APRS = new CAPRSReader(m_conf.getAPRSAPIKey(), m_conf.getAPRSRefresh());
+		LogMessage("Geeting position information from aprs.fi with ApiKey.");
+	}
+	if (startupLinking()==false) {
+		LogMessage("Cannot conect to startup reflector. Exiting...");
+		rptNetwork.close();
+
+		if (m_APRS != NULL) {
+			m_APRS->stop();
+			delete m_APRS;
+		}
+
+		if (m_gps != NULL) {
+			m_writer->close();
+			delete m_writer;
+			delete m_gps;
+		}
+
+		if (m_ysfNetwork != NULL) {
+			m_ysfNetwork->close();
+			delete m_ysfNetwork;
+		}
+
+		if (m_fcsNetwork != NULL) {
+			m_fcsNetwork->close();
+			delete m_fcsNetwork;
+		}
+
+		delete m_wiresX;
+		delete m_storage;
+		
+		if (m_xlxReflectors != NULL)
+			delete m_xlxReflectors;	
+		
+		::LogFinalise();
+
+		return 0;
+	};
 	
 	m_stopWatch.start();
 	m_ysfWatch.start();	
@@ -590,8 +634,8 @@ int CYSFGateway::run()
 
 void CYSFGateway::createGPS()
 {
-	//if (!m_conf.getAPRSEnabled())
-	//	return;
+	if (!m_conf.getAPRSEnabled())
+		return;
 
 	std::string hostname 	= m_conf.getAPRSServer();
 	unsigned int port    	= m_conf.getAPRSPort();
@@ -638,13 +682,13 @@ void CYSFGateway::createGPS()
 
 		m_writer->setStaticLocation(latitude, longitude, height);
 	}
-	// m_gps = new CGPS(m_writer);
-	//  bool ret = m_gps->open();
-	//  if (!ret) {
-	//  	delete m_gps;
-	//  	LogMessage("Error starting GPS");
-	//  	m_gps = NULL;
-	//  }
+	 m_gps = new CGPS(m_writer);
+	  bool ret = m_gps->open();
+	  if (!ret) {
+	 	delete m_gps;
+	  	LogMessage("Error starting GPS");
+	  	m_gps = NULL;
+	  }
 }
 
 void CYSFGateway::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper)
@@ -664,6 +708,7 @@ void CYSFGateway::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper)
 	
 	m_parrotAddress = CUDPSocket::lookup(m_conf.getYSFNetworkParrotAddress());
 	m_parrotPort = m_conf.getYSFNetworkParrotPort();
+
 	m_ysfReflectors->setParrot(&m_parrotAddress,m_parrotPort);
 	
 	m_ysf2nxdnAddress = CUDPSocket::lookup(m_conf.getYSFNetworkYSF2NXDNAddress());
@@ -692,8 +737,9 @@ void CYSFGateway::processWiresX(const unsigned char* buffer, unsigned char fi, u
 			::memcpy(tmp,buffer + 14U,10U);
 			tmp[10]=0;			
 			m_ysf_callsign = std::string(tmp);
-			//LogMessage("Callsign connect: %s",tmp);
-			m_srcid = findYSFID(m_ysf_callsign, true);				
+			LogMessage("Callsign connect: %s",tmp);
+			m_srcid = findYSFID(m_ysf_callsign, true);	
+			LogMessage("m_srcid: %d",m_srcid);
 			int ret = TG_Connect(m_wiresX->getDstID());
 			if (ret) {
 				LogMessage("Connected to %05d - \"%s\" has been requested by %10.10s", m_dstid, m_current.c_str(), m_ysf_callsign.c_str());
@@ -804,7 +850,7 @@ bool is_number(const std::string& s)
     return !s.empty() && it == s.end();
 }
 
-void CYSFGateway::startupLinking()
+bool CYSFGateway::startupLinking()
 {
 	int tmp_id = m_conf.getNetworkTypeStartup();	
 	CReflector* reflector;
@@ -812,16 +858,32 @@ void CYSFGateway::startupLinking()
 	switch(tmp_id) {
 		case NONE:
 			LogMessage("Error startup Type not defined.");
+			return false;
 			break;
-		case YSF: m_actual_ref=m_ysfReflectors;
+		case YSF: {
+			if (!ysfNetworkEnabled) return false;
+			m_actual_ref=m_ysfReflectors;
+		}
 		break;
-		case FCS: m_actual_ref=m_fcsReflectors;
+		case FCS: {
+			if (!m_fcsNetworkEnabled) return false;
+			m_actual_ref=m_fcsReflectors;
+		}
 		break;		
-		case DMR: m_actual_ref=m_dmrReflectors;
+		case DMR: {
+			if (!m_dmrNetworkEnabled) return false;
+			m_actual_ref=m_dmrReflectors;
+		}
+		break; 
+		case NXDN: {
+			if (!m_nxdnNetworkEnabled) return false;
+			m_actual_ref=m_nxdnReflectors;
+		}
 		break;
-		case NXDN: m_actual_ref=m_nxdnReflectors;
-		break;
-		case P25: m_actual_ref=m_p25Reflectors;
+		case P25: {
+			if (!m_p25NetworkEnabled) return false;
+			m_actual_ref=m_p25Reflectors;
+		}
 		break;
 	}
 	m_wiresX->setReflectors(m_actual_ref);
@@ -843,16 +905,19 @@ void CYSFGateway::startupLinking()
 			if (m_inactivityTimer!=NULL) m_inactivityTimer->start();			
 			m_last_DMR_TG = m_dstid; 
 			m_dmrNetwork->enable(true);
-			return;
+			return true;
 		}
 		if (is_number(m_startup)) reflector = m_actual_ref->findById(m_startup);
 		else reflector = m_actual_ref->findByName(m_startup);		
 		if (reflector != NULL) {
-			if (TG_Connect(atoi(reflector->m_id.c_str()))) 
+			if (TG_Connect(atoi(reflector->m_id.c_str()))) {
 				LogMessage("Automatic (re-)connection to %5.5s - \"%s\"", reflector->m_id.c_str(), reflector->m_name.c_str());
+				return true;
+			}
 			else LogMessage("Not Possible connection - %d", atoi(reflector->m_id.c_str()));	
 		} else LogMessage("Unknown reflector - %s", m_startup);	
 	}
+	return false;
 }
 
 void CYSFGateway::AMBE_write(unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt) {
@@ -901,15 +966,18 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 	if (dstID < 6) {
 		dstID--;
 		if (dstID==0){
+			if (!ysfNetworkEnabled) return false;
 			dstID=1;
 			m_tg_type=YSF;		
 		}
 		else if (dstID == DMR) {
+			if (!m_dmrNetworkEnabled) return false;
 			if (dstID != last_type) m_conv.reset();
 			dstID=m_last_DMR_TG;
 			m_tg_type=DMR;
 		}
 		else if (dstID == YSF) {
+			if (!ysfNetworkEnabled) return false;
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
 				m_conv.reset();
@@ -918,6 +986,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			m_tg_type=YSF;		
 		}
 		else if (dstID == FCS) {
+			if (!m_fcsNetworkEnabled) return false;
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
 				m_conv.reset();	
@@ -925,6 +994,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			dstID=m_last_FCS_TG;
 			m_tg_type=FCS;		
 		} else if (dstID == NXDN) {
+			if (!m_nxdnNetworkEnabled) return false;
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
 				m_conv.reset();	
@@ -934,6 +1004,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			dstID=m_last_NXDN_TG;
 			m_tg_type=NXDN;
 		} else if (dstID == P25) {
+			if (!m_p25NetworkEnabled) return false;
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
 				m_conv.reset();			

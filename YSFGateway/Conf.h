@@ -99,10 +99,12 @@ public:
   unsigned int getYSFNetworkYSF2DMRPort() const;
   std::string  getYSFNetworkYSF2NXDNAddress() const;
   unsigned int getYSFNetworkYSF2NXDNPort() const;
+  bool         getNXDNNetworkEnabled() const;
   std::string  getNXDNNetworkFile() const;
   unsigned int getNXDNStartup() const;
   std::string  getYSFNetworkYSF2P25Address() const;
   unsigned int getYSFNetworkYSF2P25Port() const;
+  bool         getP25NetworkEnabled() const;  
   std::string  getP25NetworkFile() const;
   unsigned int getP25Startup() const;  
   
@@ -197,10 +199,12 @@ private:
   unsigned int m_ysfNetworkParrotPort;
   std::string  m_ysfNetworkYSF2NXDNAddress;
   unsigned int m_ysfNetworkYSF2NXDNPort;
+  bool         m_nxdnNetworkEnabled;
   std::string  m_nxdnNetworkFile;
   unsigned int m_nxdnStartup;  
   std::string  m_ysfNetworkYSF2P25Address;
   unsigned int m_ysfNetworkYSF2P25Port;
+  bool         m_p25NetworkEnabled;
   std::string  m_p25NetworkFile;
   unsigned int m_p25Startup;
   

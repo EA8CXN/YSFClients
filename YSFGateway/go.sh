@@ -1,4 +1,5 @@
 rpi-rw
+sudo rm /var/log/pi-star/YSFG*
 dos2unix /home/pi-star/*cpp
 dos2unix /home/pi-star/*.h
 cp /home/pi-star/*.cpp .

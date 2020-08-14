@@ -168,7 +168,7 @@ private:
 	FILE* 			 m_file_out;
 	bool			 m_beacon;
 
-	void startupLinking();
+	bool startupLinking();
 	std::string calculateLocator();
 	void processWiresX(const unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);
 	void processDTMF(unsigned char* buffer, unsigned char dt);

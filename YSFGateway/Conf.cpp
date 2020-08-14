@@ -75,7 +75,7 @@ m_aprsServer(),
 m_aprsPort(0U),
 m_aprsPassword(),
 m_aprsCallsign(),
-m_aprsAPIKey(),
+m_aprsAPIKey(""),
 m_aprsRefresh(120),
 m_aprsDescription("YSF Node"),
 m_icon("YY"),
@@ -92,12 +92,14 @@ m_ysfNetworkEnabled(false),
 m_ysfNetworkPort(0U),
 m_ysfNetworkHosts(),
 m_ysfNetworkParrotAddress("127.0.0.1"),
-m_ysfNetworkParrotPort(0U),
+m_ysfNetworkParrotPort(42012U),
 m_ysfNetworkYSF2NXDNAddress("127.0.0.1"),
 m_ysfNetworkYSF2NXDNPort(0U),
+m_nxdnNetworkEnabled(false),
 m_nxdnNetworkFile(),
 m_ysfNetworkYSF2P25Address("127.0.0.1"),
 m_ysfNetworkYSF2P25Port(0U),
+m_p25NetworkEnabled(false),
 m_p25NetworkFile(),
 m_fcsNetworkEnabled(false),
 m_fcsNetworkFile(),
@@ -297,6 +299,8 @@ bool CConf::read()
 			m_ysfNetworkYSF2NXDNAddress = value;
 		else if (::strcmp(key, "YSF2NXDNPort") == 0)
 			m_ysfNetworkYSF2NXDNPort = (unsigned int)::atoi(value);
+		if (::strcmp(key, "NXDNEnable") == 0)
+			m_nxdnNetworkEnabled = ::atoi(value) == 1;			
 		else if (::strcmp(key, "NXDNHosts") == 0)
 			m_nxdnNetworkFile = value;
 		else if (::strcmp(key, "NXDNStartup") == 0)
@@ -305,6 +309,8 @@ bool CConf::read()
 			m_ysfNetworkYSF2P25Address = value;
 		else if (::strcmp(key, "YSF2P25Port") == 0)
 			m_ysfNetworkYSF2P25Port = (unsigned int)::atoi(value);
+		if (::strcmp(key, "P25Enable") == 0)
+			m_p25NetworkEnabled = ::atoi(value) == 1;			
 		else if (::strcmp(key, "P25Hosts") == 0)
 			m_p25NetworkFile = value;
 		else if (::strcmp(key, "P25Startup") == 0)
@@ -574,6 +580,16 @@ bool CConf::getNetworkDebug() const
 bool CConf::getYSFNetworkEnabled() const
 {
 	return m_ysfNetworkEnabled;
+}
+
+bool CConf::getNXDNNetworkEnabled() const
+{
+	return m_nxdnNetworkEnabled;
+}
+
+bool CConf::getP25NetworkEnabled() const
+{
+	return m_p25NetworkEnabled;
 }
 
 bool CConf::getNetworkNoChange() const
