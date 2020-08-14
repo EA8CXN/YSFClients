@@ -1,4 +1,4 @@
-rpi-rw
+sudo mount -o remount,rw /
 sudo rm /var/log/pi-star/YSFG*
 dos2unix /home/pi-star/*cpp
 dos2unix /home/pi-star/*.h
