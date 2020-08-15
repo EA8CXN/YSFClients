@@ -345,3 +345,13 @@ int lat, lon;
 		if (findCall(callsign, &lat, &lon)) 
 			formatGPS(buffer, lat, lon);
 }
+
+void CAPRSReader::get_gps_buffer(unsigned char *buffer, int lat, int lon){
+
+	::memcpy(buffer, dt1_temp, 10U);
+	::memcpy(buffer + 10U, dt2_temp, 10U);
+	buffer[0]=m_gps_buffer_cnt%0xFF;
+	m_gps_buffer_cnt++;
+	CrcGPS(buffer);
+	formatGPS(buffer, lat, lon);
+}

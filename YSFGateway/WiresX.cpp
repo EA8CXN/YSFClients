@@ -671,7 +671,7 @@ WX_STATUS CWiresX::processConnect(const unsigned char* source, const unsigned ch
 	
 	m_dstID = atoi(id.c_str());
 	
-	LogMessage("Connecting to %d",m_dstID);
+	//LogMessage("Connecting to %d",m_dstID);
 
 	//m_status = WXSI_CONNECT;
 	//m_timer.start();

@@ -155,7 +155,7 @@ private:
 	CStopWatch m_dmrWatch;
 	
 	BE_STATUS m_beacon_status;	
-	bool m_gps_ready;
+	bool m_open_channel;
 	bool m_not_busy;	
 	TG_STATUS m_TG_connect_state;	
 	

@@ -37,6 +37,7 @@ public:
 	void stop();
 	bool load_call();
 	void get_gps_buffer(unsigned char *buffer, std::string callsign);	
+	void get_gps_buffer(unsigned char *buffer, int lat, int lon);
 
 
 private:

@@ -314,7 +314,10 @@ void CGPS::transmitGPS(const unsigned char* source)
 		break;			
 	case 0x30U:
 		::strcpy(radio, "FT-3D");
-		break;		
+		break;
+	case 0x31U:
+		::strcpy(radio, "FTM-300D");
+		break;			
 	default:
 		::sprintf(radio, "0x%02X", m_buffer[4U]);
 		break;

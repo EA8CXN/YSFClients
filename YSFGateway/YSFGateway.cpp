@@ -179,6 +179,7 @@ m_beacon(false)
 	
 	::memset(m_ysfFrame, 0U, 200U);
 	::memset(m_dmrFrame, 0U, 50U);
+	m_conv.reset();
 }
 
 CYSFGateway::~CYSFGateway()
@@ -492,7 +493,7 @@ int CYSFGateway::run()
 
 	m_not_busy=true;	
 	m_beacon_status = BE_OFF;
-	m_gps_ready=false;
+	m_open_channel=false;
 	m_data_ready=false;
 	
 	m_unlinkReceived = false;
@@ -735,9 +736,9 @@ void CYSFGateway::processWiresX(const unsigned char* buffer, unsigned char fi, u
 			::memcpy(tmp,buffer + 14U,10U);
 			tmp[10]=0;			
 			m_ysf_callsign = std::string(tmp);
-			LogMessage("Callsign connect: %s",m_ysf_callsign.c_str());
+			//LogMessage("Callsign connect: %s",m_ysf_callsign.c_str());
 			m_srcid = findYSFID(m_ysf_callsign, true);	
-			LogMessage("m_srcid: %d",m_srcid);
+			//LogMessage("m_srcid: %d",m_srcid);
 			int ret = TG_Connect(m_wiresX->getDstID());
 			if (ret) {
 				LogMessage("Connected to %05d - \"%s\" has been requested by %10.10s", m_dstid, m_current.c_str(), m_ysf_callsign.c_str());
@@ -1097,7 +1098,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			m_dmrNetwork->enable(true);
 			reflector = m_dmrReflectors->findById(dst_str_ID);
 			if (reflector != NULL) {		
-				LogMessage("DMR connection to %s", reflector->m_name.c_str());				
+				//LogMessage("DMR connection to %s", reflector->m_name.c_str());				
 				int tglistOpt = reflector->m_opt;
 
 				switch (tglistOpt) {
@@ -1264,9 +1265,9 @@ unsigned int len;
 					if ((fn == ft) && (bn == bt)) {
 						if (m_wiresX->sendNetwork()) {
 							m_exclude=false;
-					//		LogMessage("Data allowed to go");
+							LogMessage("Data allowed to go");
 						} 
-					//	else LogMessage("Data not allowed to go to Network");
+						else LogMessage("Data not allowed to go to Network");
 						m_data_ready = true;
 					}
 				}
@@ -1304,8 +1305,8 @@ void CYSFGateway::BeaconLogic(void) {
 						m_rcv_callsign = "BEACON";
 						m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 						m_gid = 0;
-						m_conv.reset();
-						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,"");
+						if (m_APRS != NULL)
+							m_APRS->get_gps_buffer(m_gps_buffer,(int)(m_conf.getLatitude() * 1000),(int)(m_conf.getLongitude() * 1000));
 						m_file_out=fopen(beacon_name,"rb");
 						if (!m_file_out) {
 							LogMessage("Error opening file: %s.",beacon_name);
@@ -1326,16 +1327,20 @@ void CYSFGateway::BeaconLogic(void) {
 							m_conv.AMB2YSF(buffer);
 							m_conv.AMB2YSF(buffer+8U);
 							m_conv.AMB2YSF(buffer+16U);
-						} else m_beacon_status = BE_EOT;
+						} else {
+							m_beacon_status = BE_EOT;
+							m_conv.putDMREOT(true);
+							if (m_file_out) fclose(m_file_out);
+							m_beacon_Watch.start();	
+						}
 						m_bea_voice_Watch.start();
 						break;
 
 				case BE_EOT:
-						if (m_file_out) fclose(m_file_out);
-						LogMessage("Beacon Out: %ms.",beacon_name);
-						m_conv.putDMREOT(true);
-						m_beacon_Watch.start();
-						m_beacon_status = BE_OFF;						
+						//if (m_file_out) fclose(m_file_out);
+						//LogMessage("Beacon Out: %s.",beacon_name);
+						//m_conv.putDMREOT(true);
+						//m_beacon_Watch.start();					
 						break;
 
 				case BE_OFF:
@@ -1347,20 +1352,62 @@ void CYSFGateway::BeaconLogic(void) {
 		}		
 }		
 
+
+char *get_radio(char c) {
+	static char radio[10U];
+
+	switch (c) {
+	case 0x24U:
+		::strcpy(radio, "FT-1D");
+		break;
+	case 0x25U:
+		::strcpy(radio, "FTM-400D");
+		break;
+	case 0x26U:
+		::strcpy(radio, "DR-1X");
+		break;
+	case 0x27U:
+		::strcpy(radio, "FT-991");
+		break;		
+	case 0x28U:
+		::strcpy(radio, "FT-2D");
+		break;
+	case 0x29U:
+		::strcpy(radio, "FTM-100D");
+		break;
+	case 0x2BU: 
+		::strcpy(radio, "FT-70");
+		break;
+	case 0x2EU:  
+		::strcpy(radio, "FTM-7250");
+		break;			
+	case 0x30U:
+		::strcpy(radio, "FT-3D");
+		break;
+	case 0x31U:
+		::strcpy(radio, "FTM-300D");
+		break;			
+	default:
+		::sprintf(radio, "0x%02X", c);
+		break;
+	}
+	return radio;	
+}
+
 void CYSFGateway::GetFromNetwork(unsigned char *buffer, CYSFNetwork* rtpNetwork) {
 static unsigned char tmp[20];
-//int lat, lon, resp;
 static bool first_time;
+CYSFPayload ysfPayload;
 	
 	// Only pass through YSF data packets
 	if ((::memcmp(buffer + 0U, "YSFD", 4U) == 0) && !m_wiresX->isBusy()) {
 		if (m_beacon_status==BE_DATA) {
 			if (m_file_out) fclose(m_file_out);
-			LogMessage("Beacon Out");
+			LogMessage("Beacon Break.");
 			m_conv.putDMREOT(true);
 			m_beacon_Watch.start();
 			m_beacon_status = BE_OFF;
-			return;	
+			m_open_channel=true;
 		}
 	
 		CYSFFICH fich;
@@ -1371,25 +1418,13 @@ static bool first_time;
 			unsigned char dt = fich.getDT();
 			unsigned char fn = fich.getFN();
 			unsigned char ft = fich.getFT();  // ft=6 no gps  ft=7 gps
-			// rtpNetwork->write(buffer);
-			// return;
-			//unsigned char bn = fich.getBN();
-			//unsigned char bt = fich.getBT();
 			
-			// if (fi==YSF_FI_HEADER) {
-			//m_gid = fich.getDGId();
-			// }
-			//m_gid=0;
-			//LogMessage("RX Packet gid=%d, fi=%d,dt=%d,fn=%d,ft=%d.",m_gid,fi,dt,fn,ft);
-			//CUtils::dump("RX Packet",buffer,155U);										
-			// only VD_MODE2 packets
+			//LogMessage("RX Packet gid=%d, fi=%d,dt=%d,fn=%d,ft=%d.",m_gid,fi,dt,fn,ft);										
 			if ((dt==YSF_DT_DATA_FR_MODE) || (dt==YSF_DT_VOICE_FR_MODE)) {
 				// Data packets go direct to modem
-				//CUtils::dump("YSF Data from Network",buffer,155U);
 				rtpNetwork->write(buffer);	
 			} else if (dt==YSF_DT_VD_MODE2) {
 				if (fi==YSF_FI_HEADER) {
-					//m_conv.reset();
 					m_not_busy=false;
 					m_rcv_callsign = getSrcYSF(buffer);
 					LogMessage("Received voice data *%s* from *%s*.",m_rcv_callsign.c_str(),m_current.c_str());
@@ -1399,58 +1434,69 @@ static bool first_time;
 							::memcpy(m_gps_buffer, dt1_temp, 10U);
 							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
 						}
-						m_gps_ready=true;
 					}
 					m_gid = fich.getDGId();
-					LogMessage("DG-ID: %d.",m_gid);
 					m_conv.putDMRHeader();
-					//m_ysfWatch.start();
 					first_time = true;
+					m_open_channel=true;					
 				} else if (fi==YSF_FI_COMMUNICATIONS) {
-					if (m_rcv_callsign.empty()  || (strcmp(m_rcv_callsign.c_str(),"BEACON    ")==0)) {
-						//m_conv.reset();
+					// Test if late entry
+					if (m_open_channel==false) {
+					// if (m_rcv_callsign.empty()  || (strcmp(m_rcv_callsign.c_str(),"BEACON    ")==0)) {
 						if (ft==6U) {
 							if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
 							else {
 								::memcpy(m_gps_buffer, dt1_temp, 10U);
 								::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
 							}
-							m_gps_ready=true;
 						}
-						m_rcv_callsign = getSrcYSF(buffer);
+						//m_rcv_callsign = getSrcYSF(buffer);
 						m_gid = fich.getDGId();
-						LogMessage("DG-ID: %d.",m_gid);
 						LogMessage("Late Entry from %s",m_rcv_callsign.c_str());
 						m_not_busy=false;
-						// if ((ft==6U) && (m_APRS != NULL)) {
-						// 	m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-						// 	m_gps_ready=true;
-						// }	
 						m_conv.putDMRHeader();
-						//m_ysfWatch.start();
 						first_time = true;
+						m_open_channel=true;						
 					}
-					CYSFPayload ysfPayload;
-					if (first_time && (ft==6) && (fn==6)) {
-						ysfPayload.readVDMode2Data(buffer + 35U, tmp);
-						CUtils::dump("GPS Info not provided",tmp,10U);
-						first_time = false;
+					// Update gps info for ft=6
+					if ((ft==6) && (fn==6)) {
+						//show info once
+						if (first_time) {
+							ysfPayload.readVDMode2Data(buffer + 35U, tmp);
+							CUtils::dump("GPS Info not provided",tmp,10U);
+							LogMessage("Radio: %s.",get_radio(*(tmp+4)));						
+							first_time = false;
+						}
+						//update gps
+						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+						else {
+							::memcpy(m_gps_buffer, dt1_temp, 10U);
+							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
+						}						
 					}
-					if (first_time && (ft==7) && ((fn==6) || (fn==7))) {
+					m_rcv_callsign = getSrcYSF(buffer);
+					// Update gps info for ft=7
+					if ((ft==7) && ((fn==6) || (fn==7))) {
 						if (fn==6) {
-								ysfPayload.readVDMode2Data(buffer + 35U, tmp);
-								if ((*(tmp + 5U) == 0x00) && (*(tmp + 2U) == 0x62)) {
+							ysfPayload.readVDMode2Data(buffer + 35U, tmp);
+							if ((*(tmp + 5U) == 0x00) && (*(tmp + 2U) == 0x62)) {
+								if (first_time) {
 									LogMessage("GPS Info Empty. DMR Transcoding?");
-									if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-									first_time = false;								
-									m_gps_ready=true;
-								}						
+									LogMessage("Radio: %s.",get_radio(*(tmp+4)));
+									first_time = false;	
+								}									
+								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);							
+							}						
 						} else {
+							if ((*(tmp + 5U) != 0x00) || (*(tmp + 2U) != 0x62)) {
 								memcpy(m_gps_buffer,tmp,10U);
 								ysfPayload.readVDMode2Data(buffer + 35U, m_gps_buffer + 10U);
-								CUtils::dump("GPS Real info found",m_gps_buffer,20U);
-								m_gps_ready=true;
-								first_time = false;
+								if (first_time) {
+									CUtils::dump("GPS Real info found",m_gps_buffer,20U);
+									LogMessage("Radio: %s.",get_radio(*(tmp+4)));
+									first_time = false;
+								}
+							}
 						}
 					}
 					m_conv.putVCH(buffer + 35U);
@@ -1467,16 +1513,14 @@ static bool first_time;
 
 
 void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
-	static bool f_t;
 
 	// YSF Playback 
-	if ((m_ysfWatch.elapsed() > YSF_FRAME_PER) && (m_gps_ready || (m_tg_type==DMR) || (m_beacon_status!=BE_OFF))) {
+	if ((m_ysfWatch.elapsed() > YSF_FRAME_PER) && (m_open_channel || (m_beacon_status!=BE_OFF))) {
 		// Playback YSF
 		::memset(m_ysfFrame+35U,0U,200U);
 		unsigned int ysfFrameType = m_conv.getYSF(m_ysfFrame + 35U);
 		
 		if(ysfFrameType == TAG_HEADER) {
-			f_t = true;
 			m_not_busy = false;
 			m_ysf_cnt = 0U;
 
@@ -1499,8 +1543,6 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 			fich.setDT(YSF_DT_VD_MODE2);			
 			fich.setDGId(m_gid);
 			fich.setMR(2U);
-
-			//CUtils::dump("put ysf header",m_ysfFrame,155U);			
 			fich.encode(m_ysfFrame + 35U);
 
 			unsigned char csd1[20U], csd2[20U];
@@ -1510,22 +1552,25 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			CYSFPayload payload;
 			payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
+			//LogMessage("Header Playback");
 			rptNetwork->write(m_ysfFrame);
 
 			m_ysf_cnt++;
 			m_ysfWatch.start();
 		}
 		else if (ysfFrameType == TAG_EOT) {
+			unsigned int fn = (m_ysf_cnt-1) % 8U;
+			// LogMessage("EOT Playback before: %d",fn);		
 			
-			unsigned int fn = (m_ysf_cnt - 1U) % 8U;
-			
-			if (fn!=0) {
-				LogMessage("YSFPlayback fn=%d Adding %d blocks",fn,7-fn);
-				for (unsigned int i=0; i<(7U-fn);i++)
+			if (fn!=7) {
+			 	LogMessage("YSFPlayback fn=%d Adding %d blocks",fn,7-fn);
+			 	for (unsigned int i=0; i<(7U-fn);i++) 
 					m_conv.putDMRSilence();
-				m_conv.putDMREOT(true);
-				return;
+			 	m_conv.putDMREOT(false);
+				m_ysfWatch.start();
+			 	return;
 			}
+
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_current.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
@@ -1546,8 +1591,6 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 			//fich.setSQL(1U);			
 			fich.setDGId(m_gid);
 			fich.setMR(2U);
-
-			//CUtils::dump("put ysf eot",m_ysfFrame,155U);
 			fich.encode(m_ysfFrame + 35U);
 
 			unsigned char csd1[20U], csd2[20U];
@@ -1557,10 +1600,11 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			CYSFPayload payload;
 			payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
-
+			//LogMessage("EOT Playback");
 			rptNetwork->write(m_ysfFrame);
 			m_not_busy=true;
-			m_gps_ready=false;			
+			m_open_channel=false;
+			if (m_beacon_status != BE_OFF) m_beacon_status = BE_OFF;		
 		}
 		else if (ysfFrameType == TAG_DATA) {
 			CYSFFICH fich;
@@ -1575,7 +1619,6 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			// Add the YSF Sync
 			CSync::addYSFSync(m_ysfFrame + 35U);
-			//CUtils::dump("Data a",m_ysfFrame,155U);	
 			switch (fn) {
 				case 0:
 					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)"**********");
@@ -1612,11 +1655,7 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			// Net frame counter
 			m_ysfFrame[34U] = (m_ysf_cnt & 0x7FU) << 1;
-			//if (f_t) {
-				//CUtils::dump("Sending data",m_ysfFrame,155U);
-			//	f_t=false;
-			//	}
-
+			//LogMessage("Data Playback %d",m_ysf_cnt);
 			// Send data to MMDVMHost
 			rptNetwork->write(m_ysfFrame);
 
@@ -1696,14 +1735,14 @@ unsigned int CYSFGateway::findYSFID(std::string cs, bool showdst)
 	bool dmrpc = false;
 	unsigned int id;
 	
-	LogMessage("cs=%s",cs.c_str());
+	//LogMessage("cs=%s",cs.c_str());
 	
 	int first = cs.find_first_not_of(' ');
 	int mid1 = cs.find_last_of('-');
 	int mid2 = cs.find_last_of('/');
 	int last = cs.find_last_not_of(' ');
 	
-	LogMessage("trim=%s",cs.c_str());
+	//LogMessage("trim=%s",cs.c_str());
 	
 	if (mid1 == -1 && mid2 == -1 && first == -1 && last == -1)
 		cstrim = "N0CALL";
@@ -1716,7 +1755,7 @@ unsigned int CYSFGateway::findYSFID(std::string cs, bool showdst)
 	else
 		cstrim = "N0CALL";
 
-	LogMessage("cstrim=%s",cstrim.c_str());
+	//LogMessage("cstrim=%s",cstrim.c_str());
 
 	if (m_lookup != NULL) {
 		id = m_lookup->findID(cstrim);
@@ -1735,7 +1774,7 @@ unsigned int CYSFGateway::findYSFID(std::string cs, bool showdst)
 		}
 	} else id=0;
 
-	LogMessage("id=%d",id);
+	//LogMessage("id=%d",id);
 
 	return id;
 }
@@ -2044,7 +2083,7 @@ static bool first_time=true;
 			LogMessage("Initial linking to TG %d.", m_dstid);
 
 		} else {
-			LogMessage("Connecting to TG %d.", m_dstid);
+			//LogMessage("Connecting to TG %d.", m_dstid);
 			SendDummyDMR(m_srcid, m_dstid, m_dmrflco);
 		}
 
@@ -2192,7 +2231,7 @@ static bool sending_silence=false;
 					}
 				}										
 				
-				//LogMessage("End DMR received end of voice transmission, %.1f seconds", float(m_dmr_cnt) / 16.667F);
+				LogMessage("End DMR received end of voice transmission, %.1f seconds", float(m_dmr_cnt) / 16.667F);
 				rx_dmrdata.setSlotNo(2U);
 				rx_dmrdata.setSrcId(m_srcid);
 				rx_dmrdata.setDstId(m_dstid);
@@ -2263,7 +2302,6 @@ static bool sending_silence=false;
 					m_dmrNetwork->write(rx_dmrdata);
 					m_dmr_cnt++;
 				}
-
 				m_dmrWatch.start();
 			}
 		} else if(dmrFrameType == TAG_EOT) {
@@ -2313,7 +2351,7 @@ static bool sending_silence=false;
 					}
 				}					
 				
-				//LogMessage("End DMR received end of voice transmission, %.1f seconds", float(m_dmr_cnt) / 16.667F);
+				LogMessage("End DMR received end of voice transmission, %.1f seconds", float(m_dmr_cnt) / 16.667F);
 				rx_dmrdata.setSlotNo(2U);
 				rx_dmrdata.setSrcId(m_srcid);
 				rx_dmrdata.setDstId(m_dstid);
@@ -2395,10 +2433,11 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 				
 				if (m_beacon_status==BE_DATA) {
 					if (m_file_out) fclose(m_file_out);
-					LogMessage("Beacon Out");
+					LogMessage("Beacon Break.");
 					m_conv.putDMREOT(true);
 					m_beacon_Watch.start();
-					m_beacon_status = BE_OFF;	
+					m_beacon_status = BE_OFF;
+					m_open_channel=true;
 				}
 				FLCO netflco = tx_dmrdata.getFLCO();
 				unsigned char DataType = tx_dmrdata.getDataType();
@@ -2418,7 +2457,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 						if (!m_unlinkReceived && ((SrcId == 4000U) || (SrcId==m_dstid)))
 							m_unlinkReceived = true;
 
-						//LogMessage("DMR received end of voice transmission, %.1f seconds", float(m_dmrFrames) / 16.667F);
+						LogMessage("DMR received end of voice transmission, %.1f seconds", float(m_dmrFrames) / 16.667F);
 						m_conv.putDMREOT(true);
 						m_dmrNetwork->reset(2U);
 						m_networkWatchdog.stop();
@@ -2438,7 +2477,11 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 							m_rcv_callsign = "UNLINK";
 						else {
 							m_rcv_callsign = m_lookup->findCS(SrcId);
-							if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);							
+							if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+							else {
+								::memcpy(m_gps_buffer, dt1_temp, 10U);
+								::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);							
+							}							
 							CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
 							if (tmp_ref) m_netDst = tmp_ref->m_name;
 							else m_netDst = "UNKNOW";
@@ -2451,6 +2494,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 						m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
 						m_dmrFrames = 0U;
 						m_firstSync = false;
+						m_open_channel=true;
 					}
 
 					if(DataType == DT_VOICE_SYNC)
@@ -2470,7 +2514,11 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 								m_rcv_callsign = "UNLINK";
 							else{
 								m_rcv_callsign = m_lookup->findCS(SrcId);
-								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);								
+								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+								else {
+									::memcpy(m_gps_buffer, dt1_temp, 10U);
+									::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);							
+								}																
 								CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
 								if (tmp_ref) m_netDst = tmp_ref->m_name;
 								else m_netDst = "UNKNOW";
@@ -2480,6 +2528,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 							m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 							m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
 							m_dmrinfo = true;
+							m_open_channel=true;
 						}
 						m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
 						m_dmrFrames++;
@@ -2491,8 +2540,10 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 						tx_dmrdata.getData(dmr_frame);
 						m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
 						m_dmrFrames++;
-					}
 
+						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+					}
+					if (m_open_channel == false) m_open_channel=true;
 					m_networkWatchdog.clock(ms);
 					if (m_networkWatchdog.hasExpired()) {
 						LogDebug("Network watchdog has expired, %.1f seconds", float(m_dmrFrames) / 16.667F);
