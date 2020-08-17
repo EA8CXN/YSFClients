@@ -900,7 +900,8 @@ bool CYSFGateway::startupLinking()
 			if (reflector != NULL) {
 				m_wiresX->setReflector(reflector, m_dstid);
 				m_current = reflector->m_name;
-				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');		
+				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
+				LogMessage("DMR Reflector: %s",m_current.c_str());
 			}
 			if (m_inactivityTimer!=NULL) m_inactivityTimer->start();			
 			m_last_DMR_TG = m_dstid; 
@@ -1137,10 +1138,10 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				}
 
 				if (m_enableUnlink && (m_ptt_dstid != m_idUnlink) && (m_ptt_dstid != 5000)) {
-					m_not_busy=false;
-					LogMessage("Sending DMR Disconnect: Src: %s Dst: %s%d", m_ysf_callsign.c_str(), m_flcoUnlink == FLCO_GROUP ? "TG " : "", m_idUnlink);
+					 m_not_busy=false;
+					 LogMessage("Sending DMR Disconnect: Src: %s Dst: %s%d", m_ysf_callsign.c_str(), m_flcoUnlink == FLCO_GROUP ? "TG " : "", m_idUnlink);
 
-					SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);
+					 SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);
 
 					m_unlinkReceived = false;
 					m_TG_connect_state = WAITING_UNLINK;
@@ -1307,6 +1308,10 @@ void CYSFGateway::BeaconLogic(void) {
 						m_gid = 0;
 						if (m_APRS != NULL)
 							m_APRS->get_gps_buffer(m_gps_buffer,(int)(m_conf.getLatitude() * 1000),(int)(m_conf.getLongitude() * 1000));
+						else {
+							::memcpy(m_gps_buffer, dt1_temp, 10U);
+							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);							
+						}
 						m_file_out=fopen(beacon_name,"rb");
 						if (!m_file_out) {
 							LogMessage("Error opening file: %s.",beacon_name);
@@ -1331,7 +1336,7 @@ void CYSFGateway::BeaconLogic(void) {
 							m_beacon_status = BE_EOT;
 							m_conv.putDMREOT(true);
 							if (m_file_out) fclose(m_file_out);
-							m_beacon_Watch.start();	
+							m_beacon_Watch.start();
 						}
 						m_bea_voice_Watch.start();
 						break;
@@ -1502,7 +1507,7 @@ CYSFPayload ysfPayload;
 					m_conv.putVCH(buffer + 35U);
 				} else if (fi==YSF_FI_TERMINATOR) {
 					LogMessage("YSF EOT received");
-					m_not_busy=true;
+					//m_not_busy=true;
 					m_conv.putDMREOT(true);  // changed from false
 				}
 			}
@@ -1521,11 +1526,12 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 		unsigned int ysfFrameType = m_conv.getYSF(m_ysfFrame + 35U);
 		
 		if(ysfFrameType == TAG_HEADER) {
-			m_not_busy = false;
+			//m_not_busy = false;
 			m_ysf_cnt = 0U;
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_current.c_str(), YSF_CALLSIGN_LENGTH);
+//			else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 			m_ysfFrame[34U] = 0U; // Net frame counter
@@ -1573,6 +1579,7 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_current.c_str(), YSF_CALLSIGN_LENGTH);
+//			else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 			m_ysfFrame[34U] = (m_ysf_cnt & 0x7FU) <<1; // Net frame counter
@@ -1614,6 +1621,7 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_current.c_str(), YSF_CALLSIGN_LENGTH);
+			//else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 
@@ -1630,6 +1638,13 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_current.c_str());
 					break; 						
 				case 6:
+					if ((m_tg_type == DMR) && (m_beacon_status == BE_OFF)) {
+						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+						else {
+							::memcpy(m_gps_buffer, dt1_temp, 10U);
+							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
+						}
+					}
 					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*) m_gps_buffer); 
 					break;
 				case 7:
@@ -1833,17 +1848,17 @@ bool CYSFGateway::createDMRNetwork()
 	bool pcUnlink = m_conf.getDMRNetworkPCUnlink();
 
 	if (m_xlxmodule.empty()) {
-		m_dstid = getTg(m_srcHS);
-		LogMessage("getTG returns m_dstid %d",m_dstid);
-		if (m_dstid==0) {
+		//m_dstid = getTg(m_srcHS);
+		//LogMessage("getTG returns m_dstid %d",m_dstid);
+		//if (m_dstid==0) {
 			m_tgConnected=false; 
 			m_dstid = m_conf.getDMRStartup();
 			m_dmrpc = 0;
-		}
-		else {
-			m_tgConnected=true;
-			m_dmrpc = 0;
-		}
+		// }
+		// else {
+		// 	m_tgConnected=true;
+		// 	m_dmrpc = 0;
+		// }
 	}
 	else {
 		const char *xlxmod = m_xlxmodule.c_str();
@@ -2070,7 +2085,7 @@ static bool first_time=true;
 			else m_srcid=m_srcHS;	
 			if (m_enableUnlink) {
 				LogMessage("Sending DMR Disconnect: Src: %d Dst: %s%d", m_srcid, m_flcoUnlink == FLCO_GROUP ? "TG " : "", m_idUnlink);			
-				SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);
+				SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);				
 				m_ptt_dstid=m_dstid;
 				m_unlinkReceived = false;
 				m_TG_connect_state = WAITING_UNLINK;
@@ -2100,6 +2115,14 @@ static bool first_time=true;
 	if ((m_dmrNetwork!=NULL) && (m_tg_type==DMR)) { // && (m_tg_type==DMR)) {
 		if (m_dmrNetwork->isConnected()) {
 			switch (m_TG_connect_state) {
+				// case WAITING_SEND_UNLINK:
+				// 	if (m_not_busy) {
+				// 		LogMessage("Sending DMR Disconnect: Src: %d Dst: %s%d", m_srcid, m_flcoUnlink == FLCO_GROUP ? "TG " : "", m_idUnlink);			
+				// 		SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);
+				// 		m_TGChange.start();
+				// 		m_TG_connect_state = WAITING_UNLINK;
+				// 	}			
+				//     break;
 				case WAITING_UNLINK:
 					if (m_unlinkReceived) {
 						LogMessage("Unlink Received");
@@ -2117,7 +2140,7 @@ static bool first_time=true;
 					}
 					break;
 				case SEND_PTT:
-					if (!m_wiresX->isBusy() && m_TGChange.elapsed() > 600) {
+					if (m_not_busy && !m_wiresX->isBusy()) { //} && m_TGChange.elapsed() > 600) {
 						m_TGChange.start();
 						m_lostTimer.start();
 						m_TG_connect_state = TG_NONE;
@@ -2125,7 +2148,7 @@ static bool first_time=true;
 							LogMessage("Sending PTT: Src: %s Dst: %s%d", m_callsign.c_str(), m_ptt_pc ? "" : "TG ", m_ptt_dstid);
 							SendDummyDMR(m_srcid, m_ptt_dstid, m_ptt_pc ? FLCO_USER_USER : FLCO_GROUP);
 						}
-						m_not_busy=true;
+//						m_not_busy=true;
 					}
 					break;
 				default: 
@@ -2194,7 +2217,6 @@ static bool sending_silence=false;
 				m_actual_step++;
 				m_dmrWatch.start();
 			} else {
-				m_not_busy = true;
 				sending_silence = false;
 				unsigned int fill = (6U - n_dmr);
 				
@@ -2268,7 +2290,6 @@ static bool sending_silence=false;
 			}
 			else {
 				m_dmr_cnt = 0U;
-				m_not_busy=false;
 				CDMRData rx_dmrdata;
 
 				rx_dmrdata.setSlotNo(2U);
@@ -2317,7 +2338,6 @@ static bool sending_silence=false;
 				m_actual_step = 0;
 				m_dmrWatch.start();
 			} else {
-				m_not_busy=true;
 				if (n_dmr) {
 					for (unsigned int i = 0U; i < fill; i++) {
 						CDMREMB emb;
@@ -2464,6 +2484,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 						m_dmrFrames = 0U;
 						m_dmrinfo = false;
 						m_firstSync = false;
+						//m_not_busy = true;
 					}
 
 					if((DataType == DT_VOICE_LC_HEADER) && (DataType != m_dmrLastDT)) {
@@ -2476,17 +2497,11 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 						else if (SrcId == 4000U)
 							m_rcv_callsign = "UNLINK";
 						else {
-							m_rcv_callsign = m_lookup->findCS(SrcId);
-							if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-							else {
-								::memcpy(m_gps_buffer, dt1_temp, 10U);
-								::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);							
-							}							
+							m_rcv_callsign = m_lookup->findCS(SrcId);							
 							CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
 							if (tmp_ref) m_netDst = tmp_ref->m_name;
 							else m_netDst = "UNKNOW";
 						}
-
 						m_conv.putDMRHeader();
 						LogMessage("DMR audio received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
 						m_dmrinfo = true;
@@ -2495,6 +2510,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 						m_dmrFrames = 0U;
 						m_firstSync = false;
 						m_open_channel=true;
+						m_not_busy = false;
 					}
 
 					if(DataType == DT_VOICE_SYNC)
@@ -2513,24 +2529,20 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 							else if (SrcId == 4000U)
 								m_rcv_callsign = "UNLINK";
 							else{
-								m_rcv_callsign = m_lookup->findCS(SrcId);
-								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-								else {
-									::memcpy(m_gps_buffer, dt1_temp, 10U);
-									::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);							
-								}																
+								m_rcv_callsign = m_lookup->findCS(SrcId);															
 								CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
 								if (tmp_ref) m_netDst = tmp_ref->m_name;
 								else m_netDst = "UNKNOW";
 							}
-
 							LogMessage("DMR audio late entry received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
 							m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 							m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
 							m_dmrinfo = true;
 							m_open_channel=true;
 						}
+
 						m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
+						m_not_busy = false;
 						m_dmrFrames++;
 					}
 				}
@@ -2540,10 +2552,10 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 						tx_dmrdata.getData(dmr_frame);
 						m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
 						m_dmrFrames++;
-
-						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+						if (m_open_channel == false) m_open_channel=true;
+						m_not_busy = false;
 					}
-					if (m_open_channel == false) m_open_channel=true;
+					
 					m_networkWatchdog.clock(ms);
 					if (m_networkWatchdog.hasExpired()) {
 						LogDebug("Network watchdog has expired, %.1f seconds", float(m_dmrFrames) / 16.667F);
@@ -2552,6 +2564,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 						m_networkWatchdog.stop();
 						m_dmrFrames = 0U;
 						m_dmrinfo = false;
+						m_not_busy = true;
 					}
 				}
 			m_dmrLastDT = DataType;
