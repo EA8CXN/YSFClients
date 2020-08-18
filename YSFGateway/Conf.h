@@ -139,6 +139,10 @@ public:
   std::string  getMobileGPSAddress() const;
   unsigned int getMobileGPSPort() const;
 
+  // The Remote Commands section
+  bool         getRemoteCommandsEnabled() const;
+  unsigned int getRemoteCommandsPort() const;
+
 private:
   std::string  m_file;
   std::string  m_callsign;
@@ -233,6 +237,9 @@ private:
   bool         m_mobileGPSEnabled;
   std::string  m_mobileGPSAddress;
   unsigned int m_mobileGPSPort;
+
+  bool         m_remoteCommandsEnabled;
+  unsigned int m_remoteCommandsPort;
 };
 
 #endif

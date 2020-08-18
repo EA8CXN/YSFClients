@@ -172,7 +172,8 @@ m_xlxmodule(),
 m_xlxConnected(false),
 m_xlxReflectors(NULL),
 m_xlxrefl(0U),
-m_beacon(false)
+m_beacon(false),
+m_remoteSocket(NULL)
 {
 	m_ysfFrame = new unsigned char[200U];
 	m_dmrFrame = new unsigned char[50U];
@@ -426,6 +427,15 @@ int CYSFGateway::run()
 	m_dmrReflectors->reload();
 	m_nxdnReflectors->reload();
 	m_p25Reflectors->reload();
+
+	if (m_conf.getRemoteCommandsEnabled()) {
+		m_remoteSocket = new CUDPSocket(m_conf.getRemoteCommandsPort());
+		ret = m_remoteSocket->open();
+		if (!ret) {
+			delete m_remoteSocket;
+			m_remoteSocket = NULL;
+		}
+	}
 		
 	createGPS();
 	if (m_conf.getAPRSAPIKey().empty()) {
@@ -543,6 +553,9 @@ int CYSFGateway::run()
 
         YSFPlayback(&rptNetwork);
 
+		if (m_remoteSocket != NULL)
+			processRemoteCommands();		
+
 		ms = m_stopWatch.elapsed();
 		m_stopWatch.start();
 
@@ -618,6 +631,11 @@ int CYSFGateway::run()
 	if (m_fcsNetwork != NULL) {
 		m_fcsNetwork->close();
 		delete m_fcsNetwork;
+	}
+
+	if (m_remoteSocket != NULL) {
+		m_remoteSocket->close();
+		delete m_remoteSocket;
 	}
 
 	delete m_wiresX;
@@ -2571,4 +2589,74 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 			m_lostTimer.start();
 			}
 		}		
+}
+
+void CYSFGateway::processRemoteCommands()
+{
+	unsigned char buffer[200U];
+	in_addr address;
+	int tmp_dst_id;
+	unsigned int port;
+	int ret;
+
+	int res = m_remoteSocket->read(buffer, 200U, address, port);
+	if (res > 0) {
+		buffer[res] = '\0';
+		if (::memcmp(buffer + 0U, "LinkYSF", 7U) == 0) {
+			std::string id = std::string((char*)(buffer + 7U));
+			if ((m_tg_type == DMR) || (m_tg_type == P25) || (m_tg_type == NXDN)) return;
+			LogMessage("Triying to remote conect to YSF %s.",id.c_str());
+			// CReflector* reflector = m_ysfReflectors->findById(id);
+			// if (reflector == NULL)
+			// 	reflector = m_ysfReflectors->findByName(id);
+			// if (reflector != NULL) {		
+				tmp_dst_id = atoi(id.c_str());
+				// if (tmp_dst_id==0) {
+				// 	LogMessage("Reflector YSF non valid: %s",reflector->m_id.c_str());
+				// 	return;
+				// }
+				if ((m_tg_type == FCS)) {
+					m_last_YSF_TG=tmp_dst_id;
+					ret=TG_Connect(2);
+				}
+				else ret = TG_Connect(tmp_dst_id);
+				if (ret) {
+					LogMessage("Remote Connected to YSF %05d - \"%s\" has been requested", tmp_dst_id, m_current.c_str());
+					if ((m_tg_type == YSF) || (m_tg_type == FCS)) m_wiresX->SendCReply();
+				} else {
+					LogMessage("Remote Error with YSF connect");
+					m_wiresX->SendDReply();
+				}
+			// }
+		} else if (::memcmp(buffer + 0U, "LinkFCS", 7U) == 0) {
+			std::string id = std::string((char*)(buffer + 7U));
+			if ((m_tg_type == DMR) || (m_tg_type == P25) || (m_tg_type == NXDN)) return;
+			LogMessage("Triying to remote conect to FCS %s.",id.c_str());
+			// CReflector* reflector = m_fcsReflectors->findById(atoi(id.c_str()));
+			// if (reflector == NULL)
+			// 	reflector = m_fcsReflectors->findByName(id);
+			// if (reflector != NULL) {				
+			// 	int tmp_dst_id = atoi(reflector->m_id.c_str());
+			// 	if (tmp_dst_id==0) {
+			// 		LogMessage("Reflector FCS non valid: %s",reflector->m_id.c_str());
+			// 		return;
+			// 	}
+				tmp_dst_id=atoi(id.c_str());
+				if ((m_tg_type == YSF)) {
+					m_last_FCS_TG=tmp_dst_id;					
+					ret=TG_Connect(3);
+				}
+				else ret = TG_Connect(tmp_dst_id);
+				if (ret) {
+					LogMessage("Remote Connected to FCS %05d - \"%s\" has been requested", tmp_dst_id, m_current.c_str());
+					m_wiresX->SendCReply();
+				} else {
+					LogMessage("Remote Error with FCS connect");
+					m_wiresX->SendDReply();
+				}
+			// }		
+		} else {
+			CUtils::dump("Invalid remote command received", buffer, res);
+		}
+	}
 }

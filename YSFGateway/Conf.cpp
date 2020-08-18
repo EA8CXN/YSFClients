@@ -39,7 +39,8 @@ enum SECTION {
   SECTION_YSF_NETWORK,
   SECTION_FCS_NETWORK,
   SECTION_DMR_NETWORK,  
-  SECTION_MOBILE_GPS
+  SECTION_MOBILE_GPS,
+  SECTION_REMOTE_COMMANDS
 };
 
 CConf::CConf(const std::string& file) :
@@ -119,7 +120,9 @@ m_dmrIdLookupFile(),
 m_dmrIdLookupTime(0U),
 m_mobileGPSEnabled(false),
 m_mobileGPSAddress(),
-m_mobileGPSPort(0U)
+m_mobileGPSPort(0U),
+m_remoteCommandsEnabled(false),
+m_remoteCommandsPort(6073U)
 {
 }
 
@@ -160,7 +163,9 @@ bool CConf::read()
 	  else if (::strncmp(buffer, "[DMR Network]", 13U) == 0)
 		  section = SECTION_DMR_NETWORK;
 	  else if (::strncmp(buffer, "[Mobile GPS]", 12U) == 0)
-		  section = SECTION_MOBILE_GPS;	  
+		  section = SECTION_MOBILE_GPS;	 
+	  else if (::strncmp(buffer, "[Remote Commands]", 17U) == 0)
+		  section = SECTION_REMOTE_COMMANDS;		   
 	  else
 	  	  section = SECTION_NONE;
 
@@ -358,6 +363,11 @@ bool CConf::read()
 			m_mobileGPSAddress = value;
 		else if (::strcmp(key, "Port") == 0)
 			m_mobileGPSPort = (unsigned int)::atoi(value);
+	} else if (section == SECTION_REMOTE_COMMANDS) {
+		if (::strcmp(key, "Enable") == 0)
+			m_remoteCommandsEnabled = ::atoi(value) == 1;
+		else if (::strcmp(key, "Port") == 0)
+			m_remoteCommandsPort = (unsigned int)::atoi(value);
 	}
   }
 
@@ -791,5 +801,15 @@ std::string CConf::getDMRXLXModule() const
 unsigned int CConf::getDMRXLXReflector() const
 {
 	return m_dmrXLXReflector;
+}
+
+bool CConf::getRemoteCommandsEnabled() const
+{
+	return m_remoteCommandsEnabled;
+}
+
+unsigned int CConf::getRemoteCommandsPort() const
+{
+	return m_remoteCommandsPort;
 }
 

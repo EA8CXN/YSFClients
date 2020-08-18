@@ -168,6 +168,7 @@ private:
 	unsigned int     m_xlxrefl;
 	FILE* 			 m_file_out;
 	bool			 m_beacon;
+	CUDPSocket*     m_remoteSocket;
 
 	bool startupLinking();
 	std::string calculateLocator();
@@ -190,6 +191,7 @@ private:
 	void DMR_reconect_logic(void);
 	void DMR_send_Network(void);
 	void DMR_get_Modem(unsigned int ms);
+	void processRemoteCommands();
 	
 };
 
