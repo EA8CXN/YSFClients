@@ -40,12 +40,14 @@
 #include <cstring>
 #include <cctype>							
 						
-CWiresXStorage::CWiresXStorage() :
+CWiresXStorage::CWiresXStorage(std::string path_news) :
 m_callsign(),
 m_number(1)
 {
 	m_picture_file = NULL;
 	m_reg_picture = NULL;
+	if (path_news.empty()) m_newspath = std::string("/tmp/news");
+	else m_newspath = path_news;
 }
 
 CWiresXStorage::~CWiresXStorage()
@@ -76,7 +78,7 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 	::memcpy(destino,reg->to,5);
 	destino[5]=0;
 	::strcpy(m_source,destino);
-	::sprintf(index_str,"/tmp/news/%s",destino);
+	::sprintf(index_str,"%s/%s",m_newspath.c_str(),destino);
 	
 	if (stat (index_str, &buffer) != 0) {
 		status = mkdir(index_str, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);

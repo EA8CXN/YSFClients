@@ -39,7 +39,7 @@ typedef struct {
 
 class CWiresXStorage {
 public:
-	CWiresXStorage();
+	CWiresXStorage(std::string path_news);
 	~CWiresXStorage();
 	
 	unsigned int GetList(unsigned char *, unsigned int , unsigned char * , unsigned int);
@@ -69,6 +69,7 @@ private:
 	wiresx_record   *m_reg_voice;
 	std::string 	m_picture_name;
 	unsigned int    picture_final_size;
+	std::string		m_newspath;
 	
 	void UpdateIndex(wiresx_record *);
 

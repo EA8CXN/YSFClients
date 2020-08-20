@@ -73,7 +73,10 @@ const unsigned char PICT_REC[]  = {0x47U, 0x67U, 0x5FU};
 
 const unsigned char PICT_DATA[]  = {0x4EU, 0x62U, 0x5FU};
 const unsigned char PICT_BEGIN[]  = {0x4EU, 0x63U, 0x5FU};
+const unsigned char PICT_BEGIN2[]  = {0x4EU, 0x64U, 0x5FU};
+
 const unsigned char PICT_END[]  = {0x4EU, 0x65U, 0x5FU};
+
 
 const unsigned char PICT_DATA_RESP[]  = {0x4EU, 0x62U, 0x5FU, 0x26U};
 const unsigned char PICT_BEGIN_RESP[]  = {0x4EU, 0x63U, 0x5FU, 0x26U};
@@ -289,11 +292,13 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 		}
 
 		if (!valid) {
+			m_sendNetwork = false;
 			if (::memcmp(m_command + 1U, PICT_DATA, 3U) == 0) {
 				LogMessage("Error Data Packet receiving picture");
 				error_upload= true;
 			}
-			CUtils::dump("Not Valid", m_command, cmd_len);			
+			//CUtils::dump("Not Valid block", m_command, cmd_len);
+			LogMessage("Not Valid block");		
 			return WXS_NONE;
 		}
 
@@ -305,48 +310,68 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 		
 		if (::memcmp(m_command + 1U, DX_REQ, 3U) == 0) {
 			m_sendNetwork = false;
-			CUtils::dump("DX Command", m_command, cmd_len);
+			//CUtils::dump("DX Command", m_command, cmd_len);
+			LogMessage("DX Command");
 			processDX(source);
 			return WXS_DX;
 		} else if (::memcmp(m_command + 1U, ALL_REQ, 3U) == 0) {
 			m_sendNetwork = false;
-			CUtils::dump("ALL command", m_command, cmd_len);
+			//CUtils::dump("ALL command", m_command, cmd_len);
+			LogMessage("ALL command");
 			processAll(source, m_command + 5U);
 			return WXS_ALL;
 		} else if (::memcmp(m_command + 1U, CONN_REQ, 3U) == 0) {
 			m_sendNetwork = false;
 			if (m_noChange) return WXS_NONE;
-			CUtils::dump("Connect command", m_command, cmd_len);
+			//CUtils::dump("Connect command", m_command, cmd_len);
+			LogMessage("Connect command");
 			return processConnect(source, m_command + 5U);
 		} else if (::memcmp(m_command + 1U, NEWS_REQ, 3U) == 0) {
 			m_sendNetwork = false;
-			CUtils::dump("News command", m_command, cmd_len);
+			//CUtils::dump("News command", m_command, cmd_len);
+			LogMessage("News command");
 			processNews(source, m_command + 5U);
 			return WXS_NEWS;
 		} else if (::memcmp(m_command + 1U, LIST_REQ, 3U) == 0) {
 			m_sendNetwork = false;
-			CUtils::dump("List for Download command", m_command, cmd_len);
+			//CUtils::dump("List for Download command", m_command, cmd_len);
+			LogMessage("List for Download command");
 			processListDown(source, m_command + 5U);
 			return WXS_LIST;
 		} else if (::memcmp(m_command + 1U, GET_RSC, 3U) == 0) {
 			m_sendNetwork = false;
-			CUtils::dump("Get Message command", m_command, cmd_len);
+			//CUtils::dump("Get Message command", m_command, cmd_len);
+			LogMessage("Get Message command");
 			processGetMessage(source, m_command + 5U);
 			return WXS_GET_MESSAGE;
 		} else if (::memcmp(m_command + 1U, MESSAGE_REC, 3U) == 0) {
-			CUtils::dump("Message Uploading", m_command, cmd_len);
+			//CUtils::dump("Message Uploading", m_command, cmd_len);
+			LogMessage("Message Uploading");
 			return processUploadMessage(source, m_command + 5U,0);
 		} else if (::memcmp(m_command + 1U, MESSAGE_REC_GPS, 3U) == 0) {
-			CUtils::dump("Message Uploading with GPS", m_command, cmd_len);
+			//CUtils::dump("Message Uploading with GPS", m_command, cmd_len);
+			LogMessage("Message Uploading with GPS");
 			return processUploadMessage(source, m_command + 5U,1);
 		} else if (::memcmp(m_command + 1U, PICT_REC_GPS, 3U) == 0) {
-			CUtils::dump("Picture Uploading with GPS", m_command, cmd_len);
+			//CUtils::dump("Picture Uploading with GPS", m_command, cmd_len);
+			LogMessage("Picture Uploading with GPS");
 			last_ref=0;
 			return processUploadPicture(source, m_command + 5U,1);
 		} else if (::memcmp(m_command + 1U, PICT_REC, 3U) == 0) {
-			CUtils::dump("Picture Uploading", m_command, cmd_len);
+			//CUtils::dump("Picture Uploading", m_command, cmd_len);
+			LogMessage("Picture Uploading");
 			last_ref=0;
 			return processUploadPicture(source, m_command + 5U,0);
+		} else if (::memcmp(m_command + 1U, PICT_BEGIN2, 3U) == 0) {
+			LogMessage("Received second picture header.");
+			if (m_no_store_picture) m_sendNetwork = true;
+			else m_sendNetwork = false;
+			return WXS_NONE;			
+		}   else if (::memcmp(m_command + 1U, PICT_END, 3U) == 0) {
+			LogMessage("Received end of picture.");			
+			if (m_no_store_picture) m_sendNetwork = true;
+			else m_sendNetwork = false;
+			return WXS_NONE;			
 		} else if (::memcmp(m_command + 1U, PICT_DATA, 3U) == 0) {
 			if (m_end_picture) return WXS_NONE;
 			act_ref=m_command[7U];
@@ -355,8 +380,8 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 				error_upload= true;
 			}
 			last_ref=act_ref;
-			CUtils::dump("Picture Data", m_command, cmd_len);
-			LogMessage("Block size: %u.",block_size);
+			//CUtils::dump("Picture Data", m_command, cmd_len);
+			LogMessage("Picture Data. Block size: %u.",block_size);
 			if (m_no_store_picture) return WXS_NONE;
 			m_sendNetwork = false;
 			processDataPicture(m_command + 5U, block_size);
@@ -374,6 +399,7 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 			processCategory(source, m_command + 5U);
 			return WXS_NONE;
 		} else if (::memcmp(m_command + 1U, BEACON_REQ, 3U) == 0) {
+			LogMessage("Detected GM Beacon.");
 			m_sendNetwork = false;
 			return WXS_NONE;
 		} else {
@@ -586,7 +612,7 @@ WX_STATUS CWiresX::processUploadPicture(const unsigned char* source, const unsig
 		::LogMessage("Picture not for me.");
 		m_no_store_picture=true;
 		return WXS_NONE;
-	} else m_no_store_picture=true;
+	} else m_no_store_picture=false;
 	m_sendNetwork = false;
 	::LogMessage("Received Picture Upload from %10.10s", source);
 	m_timeout.start();
@@ -1013,16 +1039,38 @@ void CWiresX::sendDXReply()
 	for (unsigned int i = 0U; i < 14U; i++)
 		data[i + 20U] = m_name.at(i);
 
-
-
-
 	if (m_reflector == NULL) {
-		data[34U] = '1';
-		data[35U] = '2';
+		std::string count("000");
+		std::string description("              ");
+		// data[34U] = '1';
+		// data[35U] = '2';
 
-		data[57U] = '0';
-		data[58U] = '0';
-		data[59U] = '0';
+		// data[57U] = '0';
+		// data[58U] = '0';
+		// data[59U] = '0';
+		data[34U] = '1';
+		data[35U] = '5';
+				
+		char tmp[10];
+		char tmp1[16];
+		snprintf(tmp, sizeof(tmp), "%05d",m_dstID);
+		std::string buffAsStdStr = tmp;
+		snprintf(tmp1, sizeof(tmp1), "TG%05d",m_dstID);
+		std::string name = tmp1;
+		name.resize(16U, ' ');
+
+		for (unsigned int i = 0U; i < 5U; i++)
+			data[i + 36U] = buffAsStdStr.at(i);
+
+		for (unsigned int i = 0U; i < 16U; i++)
+			data[i + 41U] = name.at(i);
+
+		for (unsigned int i = 0U; i < 3U; i++)
+			data[i + 57U] = count.at(i);
+
+		for (unsigned int i = 0U; i < 14U; i++)
+			data[i + 70U] = description.at(i);
+
 	} else {
 		data[34U] = '1';
 		data[35U] = '5';
@@ -1071,7 +1119,8 @@ void CWiresX::sendDXReply()
 	data[127U] = 0x03U;			// End of data marker
 	data[128U] = CCRC::addCRC(data, 128U);
 
-	CUtils::dump(1U, "DX Reply", data, 129U);
+	//CUtils::dump(1U, "DX Reply", data, 129U);
+	LogMessage("DX Reply");
 
 	createReply(data, 129U, NULL);
 
@@ -1105,7 +1154,7 @@ void CWiresX::sendDXReply()
 
 void CWiresX::sendConnectReply()
 {
-	assert(m_reflector != NULL);
+//	assert(m_reflector != NULL);
 
 	unsigned char data[110U];
 	::memset(data, 0x00U, 110U);
@@ -1128,26 +1177,46 @@ void CWiresX::sendConnectReply()
 	data[34U] = '1';
 	data[35U] = '5';
 	
-	char tmp[10];
-	snprintf(tmp, sizeof(tmp), "%05d",atoi(m_reflector->m_id.c_str()));
-	std::string buffAsStdStr = tmp;
-	
-/*	LogMessage("Id: \"%s\"",buffAsStdStr.c_str());
-	LogMessage("Name: \"%s\"",m_reflector->m_name.c_str());
-	LogMessage("Count: \"%s\"",m_reflector->m_count.c_str());
-	LogMessage("Desc: \"%s\"",m_reflector->m_desc.c_str());		*/
+	if (m_reflector) {
+		char tmp[10];
+		snprintf(tmp, sizeof(tmp), "%05d",atoi(m_reflector->m_id.c_str()));
+		std::string buffAsStdStr = tmp;	
 
-	for (unsigned int i = 0U; i < 5U; i++)
-		data[i + 36U] = buffAsStdStr.at(i);
+		for (unsigned int i = 0U; i < 5U; i++)
+			data[i + 36U] = buffAsStdStr.at(i);
 
-	for (unsigned int i = 0U; i < 16U; i++)
-		data[i + 41U] = m_reflector->m_name.at(i);
+		for (unsigned int i = 0U; i < 16U; i++)
+			data[i + 41U] = m_reflector->m_name.at(i);
 
-	for (unsigned int i = 0U; i < 3U; i++)
-		data[i + 57U] = m_reflector->m_count.at(i);
+		for (unsigned int i = 0U; i < 3U; i++)
+			data[i + 57U] = m_reflector->m_count.at(i);
 
-	for (unsigned int i = 0U; i < 14U; i++)
-		data[i + 70U] = m_reflector->m_desc.at(i);
+		for (unsigned int i = 0U; i < 14U; i++)
+			data[i + 70U] = m_reflector->m_desc.at(i);
+	} else {
+		std::string count("000");
+		std::string description("              ");
+		char tmp[10];
+		char tmp1[16];
+
+		snprintf(tmp, sizeof(tmp), "%05d",m_dstID);
+		std::string buffAsStdStr = tmp;
+		snprintf(tmp1, sizeof(tmp1), "TG%05d",m_dstID);
+		std::string name = tmp1;
+		name.resize(16U, ' ');
+
+		for (unsigned int i = 0U; i < 5U; i++)
+			data[i + 36U] = buffAsStdStr.at(i);
+
+		for (unsigned int i = 0U; i < 16U; i++)
+			data[i + 41U] = name.at(i);
+
+		for (unsigned int i = 0U; i < 3U; i++)
+			data[i + 57U] = count.at(i);
+
+		for (unsigned int i = 0U; i < 14U; i++)
+			data[i + 70U] = description.at(i);
+	}
 
 	data[84U] = '0';
 	data[85U] = '0';
@@ -1158,7 +1227,8 @@ void CWiresX::sendConnectReply()
 	data[89U] = 0x03U;			// End of data marker
 	data[90U] = CCRC::addCRC(data, 90U);
 
-	CUtils::dump(1U, "CONNECT Reply", data, 91U);
+	//CUtils::dump(1U, "CONNECT Reply", data, 91U);
+	LogMessage("CONNECT Reply");
 
 	createReply(data, 91U, NULL);
 
@@ -1195,7 +1265,8 @@ void CWiresX::sendDisconnectReply()
 	data[89U] = 0x03U;			// End of data marker
 	data[90U] = CCRC::addCRC(data, 90U);
 
-	CUtils::dump(1U, "DISCONNECT Reply", data, 91U);
+	//CUtils::dump(1U, "DISCONNECT Reply", data, 91U);
+	LogMessage("DISCONNECT Reply");
 
 	createReply(data, 91U, NULL);
 
@@ -1275,7 +1346,8 @@ void CWiresX::sendAllReply()
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	CUtils::dump(1U, "ALL Reply", data, offset + 2U);
+	//CUtils::dump(1U, "ALL Reply", data, offset + 2U);
+	LogMessage("ALL Reply");
 
 	createReply(data, offset + 2U, NULL);
 
@@ -1340,7 +1412,8 @@ void CWiresX::sendLocalNewsReply()
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	CUtils::dump("Local NEWS Reply", data, offset + 2U);
+	//CUtils::dump("Local NEWS Reply", data, offset + 2U);
+	LogMessage("Local NEWS Reply");
 
 	createReply(data, offset + 2U, m_source.c_str());
 
@@ -1372,7 +1445,8 @@ void CWiresX::sendNewsReply()
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	CUtils::dump("NEWS Reply", data, offset + 2U);
+	//CUtils::dump("NEWS Reply", data, offset + 2U);
+	LogMessage("NEWS Reply");
 
 	createReply(data, offset + 2U, m_source.c_str());
 
@@ -1397,7 +1471,8 @@ void CWiresX::sendListReply()
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	CUtils::dump("Message List Reply", data, offset + 2U);
+	//CUtils::dump("Message List Reply", data, offset + 2U);
+	LogMessage("Message List Reply");
 
 	createReply(data, offset + 2U, m_source.c_str());
 	LogMessage("Source: %s.",m_source.c_str());
@@ -1430,7 +1505,8 @@ void CWiresX::sendGetMessageReply()
 		data[offset + 0U] = 0x03U;			// End of data marker
 		data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-		CUtils::dump("Message Reply", data, offset + 2U);
+		//CUtils::dump("Message Reply", data, offset + 2U);
+		LogMessage("Message Reply");
 
 		createReply(data, offset + 2U, m_source.c_str());
 		m_seqNo++;
@@ -1446,7 +1522,8 @@ void CWiresX::sendGetMessageReply()
 		data[offset + 0U] = 0x03U;			// End of data marker
 		data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-		CUtils::dump("First Picture Preamble Reply", data, offset + 2U);
+		//CUtils::dump("First Picture Preamble Reply", data, offset + 2U);
+		LogMessage("First Picture Preamble Reply");
 		m_seqNo+=3;
 
 		createReply(data, offset + 2U, m_source.c_str());
@@ -1478,7 +1555,8 @@ void CWiresX::sendPictureBegin()
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	CUtils::dump("Second Picture Preamble Reply", data, offset + 2U);
+	//CUtils::dump("Second Picture Preamble Reply", data, offset + 2U);
+	LogMessage("Second Picture Preamble Reply");
 	m_seqNo++;
 
 	createReply(data, offset + 2U, m_source.c_str());
@@ -1504,7 +1582,8 @@ void CWiresX::sendPictureData()
 	data[m_offset + 10U] = 0x03U;			// End of data marker
 	data[m_offset + 11U] = CCRC::addCRC(data, m_offset + 11U);
 
-	CUtils::dump("Picture Data Reply", data, m_offset + 12U);
+	//CUtils::dump("Picture Data Reply", data, m_offset + 12U);
+	LogMessage("Picture Data Reply");
 	m_seqNo++;
 
 	createReply(data, m_offset + 12U, m_source.c_str());
@@ -1547,7 +1626,8 @@ void CWiresX::sendPictureEnd()
 	data[12] = 0x03U;			// End of data marker
 	data[13] = CCRC::addCRC(data, 13U);
 
-	CUtils::dump("Picture End Reply", data, 14U);
+	//CUtils::dump("Picture End Reply", data, 14U);
+	LogMessage("Picture End Reply");
 	m_seqNo++;
 
 	createReply(data, 14U, m_source.c_str());
@@ -1586,7 +1666,8 @@ void CWiresX::sendUploadReply(bool pict)
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	CUtils::dump("Upload ACK", data, offset + 2U);
+	//CUtils::dump("Upload ACK", data, offset + 2U);
+	LogMessage("Upload ACK");
 
 	createReply(data, offset + 2U, m_source.c_str());
 
@@ -1613,7 +1694,8 @@ void CWiresX::sendUploadVoiceReply()
 	data[24U] = 0x03U;			// End of data marker
 	data[25U] = CCRC::addCRC(data, 25U);
 
-	CUtils::dump("Upload Voice ACK", data, 26U);
+	//CUtils::dump("Upload Voice ACK", data, 26U);
+	LogMessage("Upload Voice ACK");
 
 	createReply(data, 26U, m_source.c_str());
 
@@ -1699,7 +1781,8 @@ void CWiresX::sendSearchReply()
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	CUtils::dump(1U, "SEARCH Reply", data, offset + 2U);
+	//CUtils::dump(1U, "SEARCH Reply", data, offset + 2U);
+	LogMessage("SEARCH Reply");
 
 	createReply(data, offset + 2U, NULL);
 
@@ -1737,7 +1820,8 @@ void CWiresX::sendSearchNotFoundReply()
 	data[29U] = 0x03U;			// End of data marker
 	data[30U] = CCRC::addCRC(data, 30U);
 
-	CUtils::dump(1U, "SEARCH Reply", data, 31U);
+	//CUtils::dump(1U, "SEARCH Reply", data, 31U);
+	LogMessage("SEARCH Reply");
 
 	createReply(data, 31U, NULL);
 
@@ -1808,7 +1892,8 @@ void CWiresX::sendCategoryReply()
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	CUtils::dump(1U, "CATEGORY Reply", data, offset + 2U);
+	//CUtils::dump(1U, "CATEGORY Reply", data, offset + 2U);
+	LogMessage("CATEGORY Reply");
 
 	createReply(data, offset + 2U, NULL);
 
@@ -1864,7 +1949,8 @@ void CWiresX::makeEndPicture()
 	data[12] = 0x03U;			// End of data marker
 	data[13] = CCRC::addCRC(data, 13U);
 
-	CUtils::dump("Picture End Reply", data, 14U);
+	//CUtils::dump("Picture End Reply", data, 14U);
+	LogMessage("Picture End Reply");
 	m_seqNo++;
 
 	createReply(data, 14U, m_source.c_str());

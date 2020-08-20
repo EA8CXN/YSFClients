@@ -26,7 +26,7 @@
 #include <cstring>
 #include <cctype>
 
-char const *atext_type[6] = {"NONE","YSF ","FCS ","DMR ","NXDN","P25 "};
+char const *atext_type[7] = {"NONE","YSF ","FCS ","DMR ","DMR+","NXDN","P25 "};
 
 CReflectors::CReflectors(const std::string& hostsFile, TG_TYPE type, unsigned int reloadTime, bool makeUpper) :
 m_hostsFile(hostsFile),
@@ -179,6 +179,26 @@ bool CReflectors::load()
 
 					refl->m_type    = DMR;
 					refl->m_opt 	= atoi(p2);					
+					refl->m_name.resize(16U, ' ');
+					refl->m_desc.resize(14U, ' ');
+					m_newReflectors.push_back(refl);
+					}
+			}	else if (m_type==DMRP) {
+				char* p1 = ::strtok(buffer, ";\r\n");
+				char* p2 = ::strtok(NULL, ";\r\n");
+				
+				if (p1 != NULL && p2 != NULL) {
+					char tmp[6];
+					CReflector* refl = new CReflector;
+					
+					sprintf(tmp,"%03d", 0);
+					refl->m_count   = std::string(tmp);
+					refl->m_id      = std::string(p1);
+					refl->m_name    = std::string(p2);
+					refl->m_desc    = std::string(p2);
+
+					refl->m_type    = DMR;
+					refl->m_opt 	= 1;					
 					refl->m_name.resize(16U, ' ');
 					refl->m_desc.resize(14U, ' ');
 					m_newReflectors.push_back(refl);

@@ -168,7 +168,8 @@ private:
 	unsigned int     m_xlxrefl;
 	FILE* 			 m_file_out;
 	bool			 m_beacon;
-	CUDPSocket*     m_remoteSocket;
+	CUDPSocket*      m_remoteSocket;
+	std::string 	 m_beacon_name;
 
 	bool startupLinking();
 	std::string calculateLocator();

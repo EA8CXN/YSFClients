@@ -89,13 +89,13 @@ void CGPS::data(const unsigned char* source, const unsigned char* data, unsigned
 
 			if (valid) {
 				if (::memcmp(m_buffer + 1U, SHRT_GPS, 2U) == 0) {
-					// CUtils::dump("Short GPS data received", m_buffer, (fn - 2U) * 20U);
+					//CUtils::dump("Short GPS data received", m_buffer, (fn - 2U) * 20U);
 					transmitGPS(source);
 					m_sent = true;					
 				}
 
 				if (::memcmp(m_buffer + 1U, LONG_GPS, 2U) == 0) {
-					// CUtils::dump("Long GPS data received", m_buffer, (fn - 2U) * 20U);
+					//CUtils::dump("Long GPS data received", m_buffer, (fn - 2U) * 20U);
 					transmitGPS(source);
 					m_sent = true;					
 				}
@@ -124,13 +124,13 @@ void CGPS::data(const unsigned char* source, const unsigned char* data, unsigned
 
 			if (valid) {
 				if (::memcmp(m_buffer + 1U, SHRT_GPS, 2U) == 0) {
-					// CUtils::dump("Short GPS data received", m_buffer, (fn - 5U) * 10U);
+					//CUtils::dump("Short GPS data received", m_buffer, (fn - 5U) * 10U);
 					transmitGPS(source);
 					m_sent = true;					
 				}
 
 				if (::memcmp(m_buffer + 1U, LONG_GPS, 2U) == 0) {
-					// CUtils::dump("Long GPS data received", m_buffer, (fn - 5U) * 10U);
+					//CUtils::dump("Long GPS data received", m_buffer, (fn - 5U) * 10U);
 					transmitGPS(source);
 					m_sent = true;					
 				}
@@ -162,13 +162,13 @@ void CGPS::data(const unsigned char* source, const unsigned char* data, unsigned
 
 			if (valid) {
 				if (::memcmp(m_buffer + 1U, SHRT_GPS, 2U) == 0) {
-					// CUtils::dump("Short GPS data received", m_buffer, 40U);
+					//CUtils::dump("Short GPS data received in DATA", m_buffer, 40U);
 					transmitGPS(source);
 					m_sent = true;					
 				}
 
 				if (::memcmp(m_buffer + 1U, LONG_GPS, 2U) == 0) {
-					// CUtils::dump("Long GPS data received", m_buffer, 40U);
+					//CUtils::dump("Long GPS data received in DATA", m_buffer, 40U);
 					transmitGPS(source);
 					m_sent = true;					
 				}

@@ -122,7 +122,9 @@ m_mobileGPSEnabled(false),
 m_mobileGPSAddress(),
 m_mobileGPSPort(0U),
 m_remoteCommandsEnabled(false),
-m_remoteCommandsPort(6073U)
+m_remoteCommandsPort(6073U),
+m_newspath("/tmp/news"),
+m_beaconpath("/usr/local/sbin/beacon.amb")
 {
 }
 
@@ -214,7 +216,11 @@ bool CConf::read()
 		else if (::strcmp(key, "AMBECompA") == 0)
 			m_AMBECompA = (unsigned int)::atoi(value);
 		else if (::strcmp(key, "AMBECompB") == 0)
-			m_AMBECompB = (unsigned int)::atoi(value);		
+			m_AMBECompB = (unsigned int)::atoi(value);	
+		else if (::strcmp(key, "NewsPath") == 0)
+			m_newspath = value;
+		else if (::strcmp(key, "BeaconPath") == 0)
+			m_beaconpath = value;				
 	} else if (section == SECTION_INFO) {
 		if (::strcmp(key, "TXFrequency") == 0)
 			m_txFrequency = (unsigned int)::atoi(value);
@@ -811,5 +817,15 @@ bool CConf::getRemoteCommandsEnabled() const
 unsigned int CConf::getRemoteCommandsPort() const
 {
 	return m_remoteCommandsPort;
+}
+
+std::string CConf::getNewsPath() const
+{
+	return m_newspath;
+}
+
+std::string CConf::getBeaconPath() const
+{
+	return m_beaconpath;
 }
 

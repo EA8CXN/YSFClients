@@ -142,6 +142,8 @@ public:
   // The Remote Commands section
   bool         getRemoteCommandsEnabled() const;
   unsigned int getRemoteCommandsPort() const;
+  std::string  getNewsPath() const;  
+  std::string  getBeaconPath() const; 
 
 private:
   std::string  m_file;
@@ -240,6 +242,8 @@ private:
 
   bool         m_remoteCommandsEnabled;
   unsigned int m_remoteCommandsPort;
+  std::string  m_newspath;
+  std::string  m_beaconpath;  
 };
 
 #endif

@@ -29,6 +29,7 @@ enum TG_TYPE {
 	YSF,
 	FCS,
 	DMR,
+	DMRP,
 	P25,
 	NXDN,
 };

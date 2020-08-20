@@ -87,7 +87,7 @@ const unsigned char dt1_temp[] = {0x31, 0x22, 0x62, 0x5F, 0x29, 0x00, 0x00, 0x00
 const unsigned char dt2_temp[] = {0x00, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x1C, 0x20, 0x03, 0x08};
 
 unsigned char m_gps_buffer[20U];	
-char beacon_name[]="/usr/local/sbin/beacon.amb";
+//std::string m_beacon_name[]="/usr/local/sbin/beacon.amb";
 bool ysfNetworkEnabled;
 bool m_nxdnNetworkEnabled;
 bool m_p25NetworkEnabled;
@@ -167,13 +167,14 @@ m_dmrinfo(false),
 m_idUnlink(4000U),
 m_flcoUnlink(FLCO_GROUP),
 m_saveAMBE(false),
-m_rpt_buffer(5000U, "RPTGATEWAY"),
+m_rpt_buffer(50000U, "RPTGATEWAY"),
 m_xlxmodule(),
 m_xlxConnected(false),
 m_xlxReflectors(NULL),
 m_xlxrefl(0U),
 m_beacon(false),
-m_remoteSocket(NULL)
+m_remoteSocket(NULL),
+m_beacon_name("/usr/local/sbin/beacon.amb")
 {
 	m_ysfFrame = new unsigned char[200U];
 	m_dmrFrame = new unsigned char[50U];
@@ -404,13 +405,14 @@ int CYSFGateway::run()
 	LogInfo("Reflector List Parameters");
 	LogInfo("    YSF List: %s", file_ysf.c_str());
 	LogInfo("    FCS List: %s", file_fcs.c_str());
-	LogInfo("    DMR List: %s", file_dmr.c_str());
+	LogInfo("    DMR/DMR+ List: %s", file_dmr.c_str());
 	LogInfo("    NXDN List: %s", file_nxdn.c_str());
 	LogInfo("    P25 List: %s", file_p25.c_str());
 	
 	m_ysfReflectors = new CReflectors(file_ysf, YSF, reloadTime, wiresXMakeUpper);
 	m_fcsReflectors = new CReflectors(file_fcs, FCS, reloadTime, wiresXMakeUpper);
-	m_dmrReflectors = new CReflectors(file_dmr, DMR, reloadTime, wiresXMakeUpper);
+	if (m_conf.getDMRNetworkEnableUnlink()) m_dmrReflectors = new CReflectors(file_dmr, DMR, reloadTime, wiresXMakeUpper);
+	else m_dmrReflectors = new CReflectors(file_dmr, DMRP, reloadTime, wiresXMakeUpper);
 	m_nxdnReflectors = new CReflectors(file_nxdn, NXDN, reloadTime, wiresXMakeUpper);
 	m_p25Reflectors = new CReflectors(file_p25, P25, reloadTime, wiresXMakeUpper);
 	
@@ -487,8 +489,9 @@ int CYSFGateway::run()
 	m_ysfWatch.start();	
 
 	if (m_dmrNetworkEnabled) m_dmrWatch.start();
-
-	m_file_out=fopen(beacon_name,"rb");
+	  
+	if (!m_conf.getBeaconPath().empty()) m_beacon_name = m_conf.getBeaconPath();
+	m_file_out=fopen(m_beacon_name.c_str(),"rb");
 	if (!m_file_out || (m_beacon_time==0)) {
 		LogMessage("Beacon off");
 		m_beacon = false;
@@ -504,7 +507,7 @@ int CYSFGateway::run()
 	m_not_busy=true;	
 	m_beacon_status = BE_OFF;
 	m_open_channel=false;
-	m_data_ready=false;
+	m_data_ready=true;
 	
 	m_unlinkReceived = false;
 	m_TG_connect_state = TG_NONE;
@@ -514,6 +517,7 @@ int CYSFGateway::run()
 	memset(buffer, 0U, 2000U);
 			
 	for (;end == 0;) {
+		unsigned char token;
 		// DMR connect logic
 		if (m_dmrNetworkEnabled) DMR_reconect_logic();
 		
@@ -530,16 +534,26 @@ int CYSFGateway::run()
 		GetFromModem(&rptNetwork);
 		
 		// Send to Network delayed data packets from modem
-		while (m_rpt_buffer.hasData() && m_data_ready) {
-			m_rpt_buffer.getData(buffer,155U);
-			if ((m_ysfNetwork != NULL && (m_tg_type==YSF) && !m_exclude) && 
-				 (::memcmp(buffer + 0U, "YSFD", 4U) == 0)) {
-				 	m_ysfNetwork->write(buffer);
-				}
-			if ((m_fcsNetwork != NULL && (m_tg_type==FCS) && !m_exclude) &&
-				 (::memcmp(buffer + 0U, "YSFD", 4U) == 0)) {
-					m_fcsNetwork->write(buffer);
-				}			
+		while (m_rpt_buffer.hasData()  && m_data_ready) {
+			m_rpt_buffer.getData(&token,1U);
+			//token to stop flow of data
+			if (token==0xFF) {
+				m_data_ready = false;
+				m_rpt_buffer.getData(buffer,155U);
+				token=0;
+				m_rpt_buffer.addData(&token,1U);
+				m_rpt_buffer.addData(buffer,155U);
+			} else {
+				m_rpt_buffer.getData(buffer,155U);
+				if ((m_ysfNetwork != NULL && (m_tg_type==YSF)) &&  ///!m_exclude) && 
+					(::memcmp(buffer + 0U, "YSFD", 4U) == 0)) {
+						m_ysfNetwork->write(buffer);
+					}
+				if ((m_fcsNetwork != NULL && (m_tg_type==FCS)) &&  ///!m_exclude) &&
+					(::memcmp(buffer + 0U, "YSFD", 4U) == 0)) {
+						m_fcsNetwork->write(buffer);
+					}
+			}			
 		}		
 
 		// YSF Network receive and process		
@@ -712,7 +726,7 @@ void CYSFGateway::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper)
 {
 	assert(rptNetwork != NULL);
 
-	m_storage = new CWiresXStorage;
+	m_storage = new CWiresXStorage(m_conf.getNewsPath());
 	m_wiresX = new CWiresX(m_storage, m_callsign, rptNetwork, makeUpper);
 	m_dtmf = new CDTMF();
 	
@@ -981,6 +995,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 	CReflector* reflector;
 	std::string dst_str_ID = std::to_string(dstID);
     TG_TYPE last_type=m_tg_type;
+	int tglistOpt;
 	
 	if (dstID < 6) {
 		dstID--;
@@ -1114,68 +1129,74 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			}
 			break;
 		case DMR:
+		case DMRP:
 			m_dmrNetwork->enable(true);
 			reflector = m_dmrReflectors->findById(dst_str_ID);
-			if (reflector != NULL) {		
-				//LogMessage("DMR connection to %s", reflector->m_name.c_str());				
-				int tglistOpt = reflector->m_opt;
+			if (reflector == NULL) {
+				if (m_enableUnlink) tglistOpt = 0;
+				else tglistOpt = 1;
+			}
+			else tglistOpt = reflector->m_opt;
+			if (reflector != NULL) LogMessage("DMR connection to %s", reflector->m_name.c_str());
+			else LogMessage("DMR connection to TG%d", dstID);
 
-				switch (tglistOpt) {
-					case 0:
-						m_ptt_pc = false;
-						m_dstid = dstID;
-						m_ptt_dstid = m_dstid;
-						m_dmrflco = FLCO_GROUP;
-						LogMessage("Connect to TG %d has been requested by %s", m_dstid, m_ysf_callsign.c_str());
-						break;
+			switch (tglistOpt) {
+				case 0:
+					m_ptt_pc = false;
+					m_dstid = dstID;
+					m_ptt_dstid = m_dstid;
+					m_dmrflco = FLCO_GROUP;
+					LogMessage("Connect to TG %d has been requested by %s", m_dstid, m_ysf_callsign.c_str());
+					break;
+			
+				case 1:
+					m_ptt_pc = true;
+					m_dstid = 9U;
+					m_ptt_dstid = dstID;
+					m_dmrflco = FLCO_GROUP;
+					LogMessage("Connect to REF %d has been requested by %s", m_ptt_dstid, m_ysf_callsign.c_str());
+					break;
 				
-					case 1:
-						m_ptt_pc = true;
-						m_dstid = 9U;
-						m_dmrflco = FLCO_GROUP;
-						LogMessage("Connect to REF %d has been requested by %s", m_ptt_dstid, m_ysf_callsign.c_str());
-						break;
-					
-					case 2:
-						m_ptt_dstid = 0;
-						m_ptt_pc = true;
-						m_dstid = dstID;
-						//m_dstid = m_wiresX->getFullDstID();
-						m_dmrflco = FLCO_USER_USER;
-						LogMessage("Connect to %d has been requested by %s", m_dstid, m_ysf_callsign.c_str());
-						break;
-				
-					default:
-						m_ptt_pc = false;
-						m_dstid = dstID;
-						//m_dstid = m_wiresX->getFullDstID();
-						m_ptt_dstid = m_dstid;
-						m_dmrflco = FLCO_GROUP;
-						LogMessage("Connect to TG %d has been requested by %s", m_dstid, m_ysf_callsign.c_str());
-						break;
-				}
+				case 2:
+					m_ptt_dstid = 0;
+					m_ptt_pc = true;
+					m_dstid = dstID;
+					//m_dstid = m_wiresX->getFullDstID();
+					m_dmrflco = FLCO_USER_USER;
+					LogMessage("Connect to %d has been requested by %s", m_dstid, m_ysf_callsign.c_str());
+					break;
+			
+				default:
+					m_ptt_pc = false;
+					m_dstid = dstID;
+					//m_dstid = m_wiresX->getFullDstID();
+					m_ptt_dstid = m_dstid;
+					m_dmrflco = FLCO_GROUP;
+					LogMessage("Connect to TG %d has been requested by %s", m_dstid, m_ysf_callsign.c_str());
+					break;
+			}
 
-				if (m_enableUnlink && (m_ptt_dstid != m_idUnlink) && (m_ptt_dstid != 5000)) {
-					 m_not_busy=false;
-					 LogMessage("Sending DMR Disconnect: Src: %s Dst: %s%d", m_ysf_callsign.c_str(), m_flcoUnlink == FLCO_GROUP ? "TG " : "", m_idUnlink);
+			if (m_enableUnlink && (m_ptt_dstid != m_idUnlink) && (m_ptt_dstid != 5000)) {
+					m_not_busy=false;
+					LogMessage("Sending DMR Disconnect: Src: %s Dst: %s%d", m_ysf_callsign.c_str(), m_flcoUnlink == FLCO_GROUP ? "TG " : "", m_idUnlink);
 
-					 SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);
+					SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);
 
-					m_unlinkReceived = false;
-					m_TG_connect_state = WAITING_UNLINK;
-				} else 
-					m_TG_connect_state = SEND_REPLY;
+				m_unlinkReceived = false;
+				m_TG_connect_state = WAITING_UNLINK;
+			} else 
+				m_TG_connect_state = SEND_REPLY;
 
-				m_TGChange.start();				
-				m_current = reflector->m_name;
-				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
-				if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
-				m_tg_type = DMR;				
-				m_last_DMR_TG = dstID; 
-				m_wiresX->setReflector(reflector, m_dstid);
-				m_wiresX->setReflectors(m_dmrReflectors);
-				m_last_DMR_TG = dstID;
-			} else return false;
+			m_TGChange.start();				
+			if (reflector == NULL) m_current = std::string("TG") + std::to_string(m_dstid);
+			else m_current = reflector->m_name;
+			m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
+			if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
+			m_tg_type = DMR;				
+			m_last_DMR_TG = dstID; 
+			m_wiresX->setReflector(reflector, m_dstid);			
+			m_wiresX->setReflectors(m_dmrReflectors);
+			m_last_DMR_TG = dstID;
 			break;
 		case NXDN:
 			reflector = m_nxdnReflectors->findById(dst_str_ID);
@@ -1220,17 +1241,21 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 	
 	return true;
 }
-	
+
+
+unsigned char recv_buffer[2000U];
+
 void CYSFGateway::GetFromModem(CYSFNetwork* rptNetwork){
-unsigned char buffer[200];
-unsigned char d_buffer[200];
+
+// unsigned char d_buffer[200];
 unsigned int len;
+unsigned char token;
 	
-	while ((len=rptNetwork->read(buffer)) > 0U) {
+	while ((len=rptNetwork->read(recv_buffer)) > 0U) {
 		if (m_inactivityTimer!=NULL) m_inactivityTimer->start();		
-		if (::memcmp(buffer, "YSFD", 4U) != 0U) continue;
+		if (::memcmp(recv_buffer, "YSFD", 4U) != 0U) continue;
 		CYSFFICH fich;
-		bool valid = fich.decode(buffer + 35U);
+		bool valid = fich.decode(recv_buffer + 35U);
 		if (valid) {
 			unsigned char fi = fich.getFI();
 			unsigned char dt = fich.getDT();
@@ -1240,60 +1265,65 @@ unsigned int len;
 			unsigned char bt = fich.getBT();
 			
 			if (m_saveAMBE) 
-				AMBE_write(buffer, fi, dt, fn, ft, bn, bt);
-			
-			if (m_gps != NULL)
-				m_gps->data(buffer + 14U, buffer + 35U, fi, dt, fn, ft, m_tg_type, m_dstid);			
+				AMBE_write(recv_buffer, fi, dt, fn, ft, bn, bt);
 
-			if (fi==YSF_FI_HEADER) {
-				m_data_ready=false;
-				m_exclude = (dt == YSF_DT_DATA_FR_MODE);
-			}
-			CYSFPayload payload;
-			
-			payload.readVDMode2Data(buffer + 35U, d_buffer);
-			//CUtils::dump("Block received from modem",d_buffer,10U);
-			//CUtils::dump("Block received from modem",buffer,len);
 			//LogMessage("Packet len= %d, fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d.",len,fi,dt,fn,ft,bn,bt);	
-			if (dt != YSF_DT_DATA_FR_MODE) {
+			if (dt == YSF_DT_VOICE_FR_MODE) {
+				// flow not stop
+				token = 0x00;
 				m_data_ready = true;
-				if (m_tg_type!=DMR) m_rpt_buffer.addData(buffer,len);
+				m_rpt_buffer.addData(&token,1U);
+				m_rpt_buffer.addData(recv_buffer,len);
+			} else if (dt == YSF_DT_VD_MODE2) {
+				m_data_ready = true;
+				if (m_tg_type!=DMR) {
+					// flow not stop
+					token = 0x00;
+					m_rpt_buffer.addData(&token,1U);
+					m_rpt_buffer.addData(recv_buffer,len);
+				}
 				else {
 					if (fi == YSF_FI_HEADER) {
-						m_ysf_callsign = getSrcYSF(buffer);
+						m_ysf_callsign = getSrcYSF(recv_buffer);
 						m_dmrNetwork->reset(2U);	// OE1KBC fix
 						m_srcid = findYSFID(m_ysf_callsign, true);						
 						m_conv.putYSFHeader();
 						m_ysfFrames = 0U;
 					} else if (fi == YSF_FI_TERMINATOR) {
-						LogMessage("Received YSF Communication, %.1f seconds", float(m_ysfFrames) / 10.0F);
-/*						int extraFrames = (m_hangTime / 100U) - m_ysfFrames - 2U;
-						for (int i = 0U; i < extraFrames; i++)
-							m_conv.putDummyYSF();	*/					
+						//LogMessage("Received YSF Communication from modem, %.1f seconds", float(m_ysfFrames) / 10.0F);				
 						m_conv.putYSFEOT();
 						m_ysfFrames = 0U;					
 					} else if (fi == YSF_FI_COMMUNICATIONS) {
-						m_conv.putYSF(buffer + 35U);
+						m_conv.putYSF(recv_buffer + 35U);
 						m_ysfFrames++;							
 					}
-				}				
+				}			
 			} else {
-				if (fi == YSF_FI_COMMUNICATIONS) {		
-					processDTMF(buffer, dt);
-					processWiresX(buffer, fi, dt, fn, ft, bn, bt);
-					if ((fn == ft) && (bn == bt)) {
+					if (m_tg_type!=DMR) {
+
+						if (fi==YSF_FI_HEADER) {
+							// stop flow of data until we know if go to network or no
+							token = 0xFF;
+						} else token = 0x00;
+						m_rpt_buffer.addData(&token,1U);
+						m_rpt_buffer.addData(recv_buffer,len);
+					}		
+					//processDTMF(buffer, dt);
+					processWiresX(recv_buffer, fi, dt, fn, ft, bn, bt);
+					if (fi == YSF_FI_TERMINATOR) {
 						if (m_wiresX->sendNetwork()) {
-							m_exclude=false;
 							LogMessage("Data allowed to go");
-						} 
-						else LogMessage("Data not allowed to go to Network");
+						} else {
+							LogMessage("Data not allowed to go to Network");
+							m_rpt_buffer.clear();
+						}
 						m_data_ready = true;
 					}
-				}
-				if (m_tg_type!=DMR) m_rpt_buffer.addData(buffer,len);
 			}
+		if (m_gps != NULL)
+			m_gps->data(recv_buffer + 14U, recv_buffer + 35U, fi, dt, fn, ft, m_tg_type, m_dstid);			
 
-		if ((buffer[34U] & 0x01U) == 0x01U) {
+		if ((recv_buffer[34U] & 0x01U) == 0x01U) {
 			if (m_gps != NULL)
 				m_gps->reset();
 			m_dtmf->reset();
@@ -1330,12 +1360,12 @@ void CYSFGateway::BeaconLogic(void) {
 							::memcpy(m_gps_buffer, dt1_temp, 10U);
 							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);							
 						}
-						m_file_out=fopen(beacon_name,"rb");
+						m_file_out=fopen(m_beacon_name.c_str(),"rb");
 						if (!m_file_out) {
-							LogMessage("Error opening file: %s.",beacon_name);
+							LogMessage("Error opening file: %s.",m_beacon_name.c_str());
 						}
 						else {
-							LogMessage("Beacon Init: %s.",beacon_name);
+							LogMessage("Beacon Init: %s.",m_beacon_name.c_str());
 							//fread(buffer,4U,1U,file_out);
 							m_conv.putDMRHeader();
 							//m_ysfWatch.start();							
@@ -1354,6 +1384,7 @@ void CYSFGateway::BeaconLogic(void) {
 							m_beacon_status = BE_EOT;
 							m_conv.putDMREOT(true);
 							if (m_file_out) fclose(m_file_out);
+							LogMessage("Beacon Out: %s.",m_beacon_name.c_str());
 							m_beacon_Watch.start();
 						}
 						m_bea_voice_Watch.start();
@@ -1380,6 +1411,9 @@ char *get_radio(char c) {
 	static char radio[10U];
 
 	switch (c) {
+	case 0x10U:
+		::strcpy(radio, "BlueDV");
+		break;	
 	case 0x24U:
 		::strcpy(radio, "FT-1D");
 		break;
@@ -2518,7 +2552,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 							m_rcv_callsign = m_lookup->findCS(SrcId);							
 							CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
 							if (tmp_ref) m_netDst = tmp_ref->m_name;
-							else m_netDst = "UNKNOW";
+							//else m_netDst = std::string("TG") + std::to_string(DstId);
 						}
 						m_conv.putDMRHeader();
 						LogMessage("DMR audio received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
@@ -2550,7 +2584,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 								m_rcv_callsign = m_lookup->findCS(SrcId);															
 								CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
 								if (tmp_ref) m_netDst = tmp_ref->m_name;
-								else m_netDst = "UNKNOW";
+								//else m_netDst = "UNKNOW";
 							}
 							LogMessage("DMR audio late entry received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
 							m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
@@ -2604,7 +2638,7 @@ void CYSFGateway::processRemoteCommands()
 		buffer[res] = '\0';
 		if (::memcmp(buffer + 0U, "LinkYSF", 7U) == 0) {
 			std::string id = std::string((char*)(buffer + 7U));
-			if ((m_tg_type == DMR) || (m_tg_type == P25) || (m_tg_type == NXDN)) return;
+			//if ((m_tg_type == DMR) || (m_tg_type == P25) || (m_tg_type == NXDN)) return;
 			LogMessage("Triying to remote conect to YSF %s.",id.c_str());
 			// CReflector* reflector = m_ysfReflectors->findById(id);
 			// if (reflector == NULL)
@@ -2615,7 +2649,7 @@ void CYSFGateway::processRemoteCommands()
 				// 	LogMessage("Reflector YSF non valid: %s",reflector->m_id.c_str());
 				// 	return;
 				// }
-				if ((m_tg_type == FCS)) {
+				if ((m_tg_type != YSF) ) {
 					m_last_YSF_TG=tmp_dst_id;
 					ret=TG_Connect(2);
 				}
@@ -2642,7 +2676,7 @@ void CYSFGateway::processRemoteCommands()
 			// 		return;
 			// 	}
 				tmp_dst_id=atoi(id.c_str());
-				if ((m_tg_type == YSF)) {
+				if ((m_tg_type != FCS)) {
 					m_last_FCS_TG=tmp_dst_id;					
 					ret=TG_Connect(3);
 				}
