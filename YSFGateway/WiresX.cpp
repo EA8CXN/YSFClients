@@ -141,7 +141,6 @@ error_upload(false)
 {
 	assert(network != NULL);
 	m_enable = false;
-	m_noChange = false;
 	m_node = callsign;
 	m_node.resize(YSF_CALLSIGN_LENGTH, ' ');
 
@@ -169,7 +168,7 @@ CWiresX::~CWiresX()
 	delete[] m_command;
 }
 
-void CWiresX::setInfo(const std::string& name, unsigned int txFrequency, unsigned int rxFrequency, bool NoChange)
+void CWiresX::setInfo(const std::string& name, unsigned int txFrequency, unsigned int rxFrequency)
 {
 	assert(txFrequency > 0U);
 	assert(rxFrequency > 0U);
@@ -177,7 +176,6 @@ void CWiresX::setInfo(const std::string& name, unsigned int txFrequency, unsigne
 	m_name        = name;
 	m_txFrequency = txFrequency;
 	m_rxFrequency = rxFrequency;
-	m_noChange = NoChange;
 
 	m_name.resize(14U, ' ');
 
@@ -322,7 +320,7 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 			return WXS_ALL;
 		} else if (::memcmp(m_command + 1U, CONN_REQ, 3U) == 0) {
 			m_sendNetwork = false;
-			if (m_noChange) return WXS_NONE;
+//			if (m_noChange) return WXS_NONE;
 			//CUtils::dump("Connect command", m_command, cmd_len);
 			LogMessage("Connect command");
 			return processConnect(source, m_command + 5U);
@@ -391,7 +389,7 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 			return WXS_NONE;
 		} else if (::memcmp(m_command + 1U, DISC_REQ, 3U) == 0) {
 			m_sendNetwork = false;
-			if (m_noChange) return WXS_NONE;
+	//		if (m_noChange) return WXS_NONE;
 			processDisconnect(source);
 			return WXS_DISCONNECT;
 		} else if (::memcmp(m_command + 1U, CAT_REQ, 3U) == 0) {
@@ -685,23 +683,10 @@ WX_STATUS CWiresX::processConnect(const unsigned char* source, const unsigned ch
 {
 	m_busy = true;
 	m_busyTimer.start();
-//	CReflector* reflector;
-
 	::LogDebug("Received Connect to %5.5s from %10.10s", data, source);
-
 	std::string id = std::string((char*)data, 6U);
-
-/*	reflector = m_reflectors->findById(id);
-	if (reflector == NULL)
-		return WXS_NONE; */
-	
 	m_dstID = atoi(id.c_str());
 	
-	//LogMessage("Connecting to %d",m_dstID);
-
-	//m_status = WXSI_CONNECT;
-	//m_timer.start();
-
 	return WXS_CONNECT;
 }
 
@@ -719,17 +704,6 @@ void CWiresX::SendDReply(void) {
 	m_timer.start();
 }
 
-/*void CWiresX::processConnect(CReflector* reflector)
-{
-	m_busy = true;
-	m_busyTimer.start();
-
-	m_reflector = reflector;
-
-	m_status = WXSI_CONNECT;
-	m_timer.start();
-} */
-
 void CWiresX::processDisconnect(const unsigned char* source)
 {
 	m_busy = true;
@@ -746,9 +720,6 @@ void CWiresX::processDisconnect(const unsigned char* source)
 
 void CWiresX::clock(unsigned int ms)
 {
-//	unsigned char buffer[200U];
-
-	//m_reflectors->clock(ms);
 	m_timer.clock(ms);
 	m_ptimer.clock(ms);
 	m_timeout.clock(ms);	

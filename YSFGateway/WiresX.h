@@ -83,7 +83,7 @@ public:
 	unsigned int getTgCount();
 	unsigned int getOpt(unsigned int id);
 
-	void setInfo(const std::string& name, unsigned int txFrequency, unsigned int rxFrequency, bool NoChange);
+	void setInfo(const std::string& name, unsigned int txFrequency, unsigned int rxFrequency);
 
 	bool start();
 	bool isBusy() const;
@@ -148,7 +148,7 @@ private:
 	bool			m_end_picture;
 	bool			error_upload;
 	bool			m_enable;
-	bool            m_noChange;
+//	bool            m_noChange;
 	CYSFNetwork*    m_ysfNetwork;
 	bool 			m_no_store_picture;
 	bool 		    m_sendNetwork;

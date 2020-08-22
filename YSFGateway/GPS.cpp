@@ -306,6 +306,9 @@ void CGPS::transmitGPS(const unsigned char* source)
 	case 0x29U:
 		::strcpy(radio, "FTM-100D");
 		break;
+	case 0x2AU:
+		::strcpy(radio, "FTM-3200");
+		break;			
 	case 0x2BU: 
 		::strcpy(radio, "FT-70");
 		break;

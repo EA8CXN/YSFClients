@@ -470,8 +470,8 @@ const unsigned char YSF_SILENCE[] = {0x7BU, 0xB2U, 0x8EU, 0x43U, 0x36U, 0xE4U, 0
 CModeConv::CModeConv() :
 m_ysfN(0U),
 m_dmrN(0U),
-m_YSF(5000U, "DMR2YSF"),
-m_DMR(5000U, "YSF2DMR")
+m_YSF(50000U, "DMR2YSF"),
+m_DMR(50000U, "YSF2DMR")
 {
 }
 

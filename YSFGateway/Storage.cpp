@@ -67,8 +67,8 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 	int status;
 	
 	number=0;
-	if (stat ("/tmp/news", &buffer) != 0) {
-		status = mkdir("/tmp/news", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	if (stat (m_newspath.c_str(), &buffer) != 0) {
+		status = mkdir(m_newspath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (status != 0) {
 				::LogMessage("Cannot create News Directory.");
 				return;		
@@ -122,7 +122,7 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 	reg->number=number;
 	
 	if (reg->type[0]=='T') {
-		::sprintf(index_str,"/tmp/news/%s/%05u.DAT",destino,number);	
+		::sprintf(index_str,"%s/%s/%05u.DAT",m_newspath.c_str(),destino,number);	
 		file = fopen(index_str,"wb");
 		if (!file) {
 			LogMessage("Error writing message file: %s",index_str);
@@ -148,8 +148,8 @@ void CWiresXStorage::StorePicture(unsigned const char* data, unsigned const char
 	
 	picture_final_size=0;
 	number=1;
-	if (stat ("/tmp/news", &buffer) != 0) {
-		status = mkdir("/tmp/news", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	if (stat (m_newspath.c_str(), &buffer) != 0) {
+		status = mkdir(m_newspath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (status != 0) {
 				::LogMessage("Cannot create News Directory.");
 				return;		
@@ -170,7 +170,7 @@ void CWiresXStorage::StorePicture(unsigned const char* data, unsigned const char
 	
 	::memcpy(destino,data+off+30U,5U);
 	destino[5]=0;	
-	::sprintf(index_str,"/tmp/news/%s",destino);
+	::sprintf(index_str,"%s/%s",m_newspath.c_str(),destino);
 	
 	if (stat (index_str, &buffer) != 0) {
 		status = mkdir(index_str, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -192,7 +192,7 @@ void CWiresXStorage::StorePicture(unsigned const char* data, unsigned const char
 	::memcpy(m_reg_picture->subject,data+off+45U,16U);
 	::memcpy(m_reg_picture->token,data+off,6U);
 
-	::sprintf(index_str,"/tmp/news/%s/%05u.JPG",destino,number);
+	::sprintf(index_str,"%s/%s/%05u.JPG",m_newspath.c_str(),destino,number);
 	std::string file_name(index_str);
 	m_picture_name = file_name;
 	m_picture_file = fopen(index_str,"wb");
@@ -246,7 +246,7 @@ unsigned int CWiresXStorage::GetList(unsigned char *data, unsigned int type, uns
 	char tmp[6];
 	::memcpy(tmp,source,5U);
 	tmp[5]=0;
-	::sprintf(index_str,"/tmp/news/%s/INDEX.DAT",tmp);	
+	::sprintf(index_str,"%s/%s/INDEX.DAT",m_newspath.c_str(),tmp);	
 	file = fopen(index_str,"rb");
 	if (!file) {
 		LogMessage("Error getting index file: %s",index_str);
@@ -320,12 +320,12 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 	
 	::memcpy(tmp,source,5U);
 	tmp[5]=0;
-	::sprintf(file_name,"/tmp/news/%s/%05u.JPG",tmp,number);
+	::sprintf(file_name,"%s/%s/%05u.JPG",m_newspath.c_str(),tmp,number);
 	if (stat (file_name, &buffer) < 0) {
-		::sprintf(file_name,"/tmp/news/%s/%05u.AMB",tmp,number);
+		::sprintf(file_name,"%s/%s/%05u.AMB",m_newspath.c_str(),tmp,number);
 		if (stat (file_name, &buffer) < 0) {		
 			data[0]='T';
-			::sprintf(file_name,"/tmp/news/%s/%05u.DAT",tmp,number);
+			::sprintf(file_name,"%s/%s/%05u.DAT",m_newspath.c_str(),tmp,number);
 			if ((file=fopen(file_name,"rb"))==0) {
 				LogMessage("Error getting data file: %s",file_name);
 				return 0U;
@@ -350,7 +350,7 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 		
 		m_size=buffer.st_size;
 
-		::sprintf(index_str,"/tmp/news/%s/INDEX.DAT",tmp);	
+		::sprintf(index_str,"%s/%s/INDEX.DAT",m_newspath.c_str(),tmp);	
 		file = fopen(index_str,"rb");
 		if (!file) {
 			LogMessage("Error getting index file: %s",index_str);
@@ -405,7 +405,7 @@ unsigned int CWiresXStorage::GetPictureHeader(unsigned char *data,unsigned int n
 	
 	::memcpy(tmp,source,5U);
 	tmp[5]=0;
-	::sprintf(index_str,"/tmp/news/%s/INDEX.DAT",tmp);	
+	::sprintf(index_str,"%s/%s/INDEX.DAT",m_newspath.c_str(),tmp);	
 	file = fopen(index_str,"rb");
 	if (!file) {
 		LogMessage("Error getting index file: %s",index_str);
@@ -486,8 +486,8 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const
 	int status;	
 
 	number=1;
-	if (stat ("/tmp/news", &buffer) != 0) {
-		status = mkdir("/tmp/news", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	if (stat (m_newspath.c_str(), &buffer) != 0) {
+		status = mkdir(m_newspath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (status != 0) {
 				::LogMessage("Cannot create News Directory.");
 				return std::string("");		
@@ -508,7 +508,7 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const
 	
 	::memcpy(destino,data+off,5U);
 	destino[5]=0;	
-	::sprintf(index_str,"/tmp/news/%s",destino);
+	::sprintf(index_str,"%s/%s",m_newspath.c_str(),destino);
 	
 	if (stat (index_str, &buffer) != 0) {
 		status = mkdir(index_str, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -536,7 +536,7 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const
 	//::memcpy(reg->subject,data+58U,10U);	
 	//::memcpy(reg->text,data+off+45U,80U);	
 
-	::sprintf(index_str,"/tmp/news/%s/%05u.AMB",destino,number);
+	::sprintf(index_str,"%s/%s/%05u.AMB",m_newspath.c_str(),destino,number);
 	std::string file_name(index_str);
 	
 	return file_name;

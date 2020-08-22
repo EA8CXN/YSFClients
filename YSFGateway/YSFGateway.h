@@ -186,7 +186,8 @@ private:
 	bool createDMRNetwork();
 	void SendDummyDMR(unsigned int srcid, unsigned int dstid, FLCO dmr_flco);
 	unsigned int findYSFID(std::string cs, bool showdst);
-	std::string getSrcYSF(const unsigned char* source);
+	std::string getSrcYSF_fromData(const unsigned char* source);
+	std::string getSrcYSF_fromHeader(const unsigned char* source);	
 	int  getTg(int m_srcHS);
 	void writeXLXLink(unsigned int srcId, unsigned int dstId, CDMRNetwork* network);
 	void DMR_reconect_logic(void);

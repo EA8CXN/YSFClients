@@ -28,6 +28,7 @@
 #include "Log.h"
 #include "Utils.h"
 
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>
 #else
@@ -85,6 +86,8 @@ char const *text_type[6] = {"NONE","YSF ","FCS ","DMR ","NXDN","P25 "};
 // DT1 and DT2, suggested by Manuel EA7EE
 const unsigned char dt1_temp[] = {0x31, 0x22, 0x62, 0x5F, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00};
 const unsigned char dt2_temp[] = {0x00, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x1C, 0x20, 0x03, 0x08};
+bool first_time_DMR = true;
+bool first_time_YSF = true;
 
 unsigned char m_gps_buffer[20U];	
 //std::string m_beacon_name[]="/usr/local/sbin/beacon.amb";
@@ -735,7 +738,7 @@ void CYSFGateway::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper)
 	unsigned int txFrequency = m_conf.getTxFrequency();
 	unsigned int rxFrequency = m_conf.getRxFrequency();
 	
-	m_wiresX->setInfo(name, txFrequency, rxFrequency, m_conf.getNetworkNoChange());
+	m_wiresX->setInfo(name, txFrequency, rxFrequency);
 	
 	m_parrotAddress = CUDPSocket::lookup(m_conf.getYSFNetworkParrotAddress());
 	m_parrotPort = m_conf.getYSFNetworkParrotPort();
@@ -763,21 +766,23 @@ void CYSFGateway::processWiresX(const unsigned char* buffer, unsigned char fi, u
     //LogMessage("Calling process with fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d",fi,dt,fn,ft,bn,bt);
 	WX_STATUS status = m_wiresX->process(buffer + 35U, buffer + 14U, fi, dt, fn, ft, bn, bt);
 	switch (status) {		
-		case WXS_CONNECT: {
-		    char tmp[14];
-			::memcpy(tmp,buffer + 14U,10U);
-			tmp[10]=0;			
-			m_ysf_callsign = std::string(tmp);
-			//LogMessage("Callsign connect: %s",m_ysf_callsign.c_str());
+		case WXS_CONNECT: {			
+			m_ysf_callsign = getSrcYSF_fromData(buffer);
+			LogMessage("Callsign connect: %s",m_ysf_callsign.c_str());
 			m_srcid = findYSFID(m_ysf_callsign, true);	
 			//LogMessage("m_srcid: %d",m_srcid);
-			int ret = TG_Connect(m_wiresX->getDstID());
-			if (ret) {
-				LogMessage("Connected to %05d - \"%s\" has been requested by %10.10s", m_dstid, m_current.c_str(), m_ysf_callsign.c_str());
-				if ((m_tg_type == YSF) || (m_tg_type == FCS)) m_wiresX->SendCReply();
-			} else {
-				LogMessage("Error with connect");
+			if (m_NoChange) {
+				LogMessage("Not allow to connect to other reflectors.");
 				m_wiresX->SendDReply();
+			} else {				
+				int ret = TG_Connect(m_wiresX->getDstID());
+				if (ret) {
+					LogMessage("DTMF Connected to %05d - \"%s\" has been requested by %10.10s", m_dstid, m_current.c_str(), m_ysf_callsign.c_str());
+					if ((m_tg_type == YSF) || (m_tg_type == FCS)) m_wiresX->SendCReply();
+				} else {
+					LogMessage("DTMF Error with connect");
+					m_wiresX->SendDReply();
+				}	
 			}				
 		}
 		break;
@@ -801,22 +806,23 @@ void CYSFGateway::processDTMF(unsigned char* buffer, unsigned char dt)
 
 	switch (status) {
 	case WXS_CONNECT: {
-		    char tmp[14];
-			::memcpy(tmp,buffer + 14U,10U);
-			tmp[10]=0;
-			m_ysf_callsign = std::string(tmp);
+			m_ysf_callsign = getSrcYSF_fromData(buffer);
 			m_srcid = findYSFID(m_ysf_callsign, true);			
 			std::string id = m_dtmf->getReflector();
 			unsigned int tmp_dst_id = atoi(id.c_str());
-			
-			int ret = TG_Connect(tmp_dst_id);
-			if (ret) {
-				LogMessage("DTMF Connected to %05d - \"%s\" has been requested by %10.10s", m_dstid, m_current.c_str(), m_ysf_callsign.c_str());
-				if ((m_tg_type == YSF) || (m_tg_type == FCS)) m_wiresX->SendCReply();
-			} else {
-				LogMessage("DTMF Error with connect");
+			if (m_NoChange) {
+				LogMessage("Not allow to connect to other reflectors.");
 				m_wiresX->SendDReply();
-			}				
+			} else {				
+				int ret = TG_Connect(tmp_dst_id);
+				if (ret) {
+					LogMessage("DTMF Connected to %05d - \"%s\" has been requested by %10.10s", m_dstid, m_current.c_str(), m_ysf_callsign.c_str());
+					if ((m_tg_type == YSF) || (m_tg_type == FCS)) m_wiresX->SendCReply();
+				} else {
+					LogMessage("DTMF Error with connect");
+					m_wiresX->SendDReply();
+				}	
+			}			
 		}
 		break;
 		default:
@@ -1003,27 +1009,24 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			if (!ysfNetworkEnabled) return false;
 			dstID=1;
 			m_tg_type=YSF;		
-		}
-		else if (dstID == DMR) {
+		} else if (dstID == DMR) {
 			if (!m_dmrNetworkEnabled) return false;
-			if (dstID != last_type) m_conv.reset();
+			//if (dstID != last_type) m_conv.reset();
 			dstID=m_last_DMR_TG;
 			m_tg_type=DMR;
-		}
-		else if (dstID == YSF) {
+		} else if (dstID == YSF) {
 			if (!ysfNetworkEnabled) return false;
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
-				m_conv.reset();
+				//m_conv.reset();
 			}				
 			dstID=m_last_YSF_TG;
 			m_tg_type=YSF;		
-		}
-		else if (dstID == FCS) {
+		} else if (dstID == FCS) {
 			if (!m_fcsNetworkEnabled) return false;
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
-				m_conv.reset();	
+				//m_conv.reset();	
 			}
 			dstID=m_last_FCS_TG;
 			m_tg_type=FCS;		
@@ -1031,7 +1034,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			if (!m_nxdnNetworkEnabled) return false;
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
-				m_conv.reset();	
+				//m_conv.reset();	
 			}
 			m_ysfNetwork->setDestination("YSF2NXDN", m_ysf2nxdnAddress, m_ysf2nxdnPort);
 			m_ysfNetwork->writePoll(3U);						
@@ -1041,7 +1044,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			if (!m_p25NetworkEnabled) return false;
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
-				m_conv.reset();			
+			//	m_conv.reset();			
 			}				
 			m_ysfNetwork->setDestination("YSF2P25", m_ysf2p25Address, m_ysf2p25Port);
 			m_ysfNetwork->writePoll(3U);					
@@ -1050,6 +1053,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 		}
 		
 	}
+
+
 	// Don´t try to reconnect to mode
 	if ((dstID<6) && (dstID>1)) return false;
 	dst_str_ID = std::to_string(dstID);
@@ -1057,7 +1062,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 		case NONE:
 			LogMessage("Error startup Type not defined.");
 			break;		
-		case YSF:
+		case YSF: {
 		    if (dstID==1) {
 				reflector = m_ysfReflectors->findById(dst_str_ID);
 				LogMessage("Trying PARROT");					
@@ -1076,17 +1081,19 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_dstid = dstID;
 				m_wiresX->setReflectors(m_ysfReflectors);					
 				m_wiresX->setReflector(reflector, m_dstid);			
-			}
-			else if (m_ysfNetwork != NULL) {
+			} else if (m_ysfNetwork != NULL) {
 				if (m_inactivityTimer!=NULL) m_inactivityTimer->stop();
 				m_lostTimer.stop();
 
 				reflector = m_ysfReflectors->findById(dst_str_ID);
 				if (reflector != NULL) {
-					//LogMessage("Automatic (re-)connection to %5.5s - \"%s\"", reflector->m_id.c_str(), reflector->m_name.c_str());
+					if (dstID!=m_last_YSF_TG || first_time_YSF) {
+						first_time_YSF = false;
+						//LogMessage("Automatic (re-)connection to %5.5s - \"%s\"", reflector->m_id.c_str(), reflector->m_name.c_str());
 
-					m_ysfNetwork->setDestination(reflector->m_name, reflector->m_address, reflector->m_port);
-					m_ysfNetwork->writePoll(3U);
+						m_ysfNetwork->setDestination(reflector->m_name, reflector->m_address, reflector->m_port);
+						m_ysfNetwork->writePoll(3U);
+					}
 
 					m_current = reflector->m_name;
 					m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
@@ -1098,7 +1105,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 					m_wiresX->setReflectors(m_ysfReflectors);					
 					m_wiresX->setReflector(reflector, m_dstid);
 					m_last_YSF_TG = dstID;
-				} else return false;
+					} else return false;
+				}  else return false;
 			}
 			break;
 		case FCS:		
@@ -1135,8 +1143,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			if (reflector == NULL) {
 				if (m_enableUnlink) tglistOpt = 0;
 				else tglistOpt = 1;
-			}
-			else tglistOpt = reflector->m_opt;
+			} else tglistOpt = reflector->m_opt;
+		
 			if (reflector != NULL) LogMessage("DMR connection to %s", reflector->m_name.c_str());
 			else LogMessage("DMR connection to TG%d", dstID);
 
@@ -1176,26 +1184,30 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 					break;
 			}
 
-			if (m_enableUnlink && (m_ptt_dstid != m_idUnlink) && (m_ptt_dstid != 5000)) {
-					m_not_busy=false;
-					LogMessage("Sending DMR Disconnect: Src: %s Dst: %s%d", m_ysf_callsign.c_str(), m_flcoUnlink == FLCO_GROUP ? "TG " : "", m_idUnlink);
+			if ((dstID != m_last_DMR_TG) || first_time_DMR) {	
+				if (m_enableUnlink && (m_ptt_dstid != m_idUnlink) && (m_ptt_dstid != 5000)) {
+						m_not_busy=false;
+						LogMessage("Sending DMR Disconnect: Src: %s Dst: %s%d", m_ysf_callsign.c_str(), m_flcoUnlink == FLCO_GROUP ? "TG " : "", m_idUnlink);
 
-					SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);
+						SendDummyDMR(m_srcid, m_idUnlink, m_flcoUnlink);
 
-				m_unlinkReceived = false;
-				m_TG_connect_state = WAITING_UNLINK;
-			} else 
-				m_TG_connect_state = SEND_REPLY;
-
-			m_TGChange.start();				
+					m_unlinkReceived = false;
+					m_TG_connect_state = WAITING_UNLINK;
+				} else 
+					m_TG_connect_state = SEND_REPLY;
+				m_TGChange.start();	
+			}			
 			if (reflector == NULL) m_current = std::string("TG") + std::to_string(m_dstid);
 			else m_current = reflector->m_name;
 			m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
 			if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
 			m_tg_type = DMR;				
-			m_last_DMR_TG = dstID; 
 			m_wiresX->setReflector(reflector, m_dstid);			
 			m_wiresX->setReflectors(m_dmrReflectors);
+			if (dstID == m_last_DMR_TG && !first_time_DMR) {
+				m_wiresX->SendCReply();
+			}
+			if (first_time_DMR) first_time_DMR = false;
 			m_last_DMR_TG = dstID;
 			break;
 		case NXDN:
@@ -1284,7 +1296,7 @@ unsigned char token;
 				}
 				else {
 					if (fi == YSF_FI_HEADER) {
-						m_ysf_callsign = getSrcYSF(recv_buffer);
+						m_ysf_callsign = getSrcYSF_fromHeader(recv_buffer);
 						m_dmrNetwork->reset(2U);	// OE1KBC fix
 						m_srcid = findYSFID(m_ysf_callsign, true);						
 						m_conv.putYSFHeader();
@@ -1328,12 +1340,12 @@ unsigned char token;
 				m_gps->reset();
 			m_dtmf->reset();
 			}
-		}
+		} 
 	}
 }
 
 void CYSFGateway::BeaconLogic(void) {
-	unsigned char buffer[40];
+	unsigned char buffer[50U];
 	unsigned int n;	
 	static bool first_time_b = true;
 	
@@ -1351,6 +1363,7 @@ void CYSFGateway::BeaconLogic(void) {
 
 			switch (m_beacon_status) {
 				case BE_INIT:
+						m_conv.reset();
 						m_rcv_callsign = "BEACON";
 						m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 						m_gid = 0;
@@ -1367,27 +1380,31 @@ void CYSFGateway::BeaconLogic(void) {
 						else {
 							LogMessage("Beacon Init: %s.",m_beacon_name.c_str());
 							//fread(buffer,4U,1U,file_out);
-							m_conv.putDMRHeader();
-							//m_ysfWatch.start();							
+							m_conv.putDMRHeader();							
 							m_beacon_status = BE_DATA;
 						}
 						m_bea_voice_Watch.start();
 						break;
 
 				case BE_DATA:
-						n=fread(buffer,1U,24U,m_file_out);
-						if (n>23U) {
-							m_conv.AMB2YSF(buffer);
-							m_conv.AMB2YSF(buffer+8U);
-							m_conv.AMB2YSF(buffer+16U);
-						} else {
-							m_beacon_status = BE_EOT;
-							m_conv.putDMREOT(true);
-							if (m_file_out) fclose(m_file_out);
-							LogMessage("Beacon Out: %s.",m_beacon_name.c_str());
+						if (m_beacon_Watch.elapsed()>YSF_FRAME_PER) {
+							n=fread(buffer,1U,40U,m_file_out);
+							if (n>39U) {
+								m_conv.AMB2YSF(buffer);
+								m_conv.AMB2YSF(buffer+8U);
+								m_conv.AMB2YSF(buffer+16U);
+								m_conv.AMB2YSF(buffer+24U);
+								m_conv.AMB2YSF(buffer+32U);
+							} else {
+								m_beacon_status = BE_EOT;
+								m_conv.putDMREOT(true);
+								if (m_file_out) fclose(m_file_out);
+								LogMessage("Beacon Out: %s.",m_beacon_name.c_str());
+
+							}
 							m_beacon_Watch.start();
+							m_bea_voice_Watch.start();
 						}
-						m_bea_voice_Watch.start();
 						break;
 
 				case BE_EOT:
@@ -1413,7 +1430,13 @@ char *get_radio(char c) {
 	switch (c) {
 	case 0x10U:
 		::strcpy(radio, "BlueDV");
-		break;	
+		break;
+	case 0x11U:
+		::strcpy(radio, "Peanut");
+		break;
+	case 0x15U:
+		::strcpy(radio, "YSF2DMR");
+		break;					
 	case 0x24U:
 		::strcpy(radio, "FT-1D");
 		break;
@@ -1432,6 +1455,9 @@ char *get_radio(char c) {
 	case 0x29U:
 		::strcpy(radio, "FTM-100D");
 		break;
+	case 0x2AU:
+		::strcpy(radio, "FTM-3200");
+		break;		
 	case 0x2BU: 
 		::strcpy(radio, "FT-70");
 		break;
@@ -1451,9 +1477,23 @@ char *get_radio(char c) {
 	return radio;	
 }
 
+bool containsOnlyASCII(const std::string& filePath) {
+  for (auto c: filePath) {
+    if (static_cast<unsigned char>(c) > 127) {
+      return false;
+    }
+  }
+  return true;
+}
+
+int silence_number;
+char alien_user[YSF_CALLSIGN_LENGTH+1];
+
 void CYSFGateway::GetFromNetwork(unsigned char *buffer, CYSFNetwork* rtpNetwork) {
 static unsigned char tmp[20];
-static bool first_time;
+static bool first_time,beacon_running;
+std::string tmp_str;
+//static unsigned int last_num,act_num;
 CYSFPayload ysfPayload;
 	
 	// Only pass through YSF data packets
@@ -1465,7 +1505,8 @@ CYSFPayload ysfPayload;
 			m_beacon_Watch.start();
 			m_beacon_status = BE_OFF;
 			m_open_channel=true;
-		}
+			beacon_running = true;
+		} else beacon_running = false;
 	
 		CYSFFICH fich;
 		bool valid = fich.decode(buffer + 35U);
@@ -1475,22 +1516,58 @@ CYSFPayload ysfPayload;
 			unsigned char dt = fich.getDT();
 			unsigned char fn = fich.getFN();
 			unsigned char ft = fich.getFT();  // ft=6 no gps  ft=7 gps
-			
+
+			//  if (fi==YSF_FI_HEADER) {
+			//  	last_num=buffer[34U];
+			//  } else 
+			//  if (fi==YSF_FI_COMMUNICATIONS) {
+			// 	if (::memcmp(buffer +14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH) != 0) {
+			// 		strncpy(alien_user,buffer+14,YSF_CALLSIGN_LENGTH);
+			// 		LogMessage("packet from alien user %s.Rejecting",m_rcv_callsign.c_str());
+			// 	}
+			//  }
+			// 	act_num=buffer[34U];
+			// 	if ((act_num != ((last_num+2) & 0xFFU)) && (act_num != ((last_num+4) & 0xFFU)) && (act_num != ((last_num+6) & 0xFFU))
+			// 	&& (act_num != ((last_num+8) & 0xFFU)) && (act_num != ((last_num+10) & 0xFFU))) {
+			// 		LogMessage("packet out of order actual=%d, last=%d, rejecting..",act_num,last_num);
+			// 		//LogMessage("Packet out of order rejected");
+			// 		last_num=act_num;
+			// 		return;
+			// 	} 
+			// 	// 	LogMessage("packet out of order actual=%d, last=%d",act_num,last_num);
+			// 	last_num=act_num;
+			// }		
+
 			//LogMessage("RX Packet gid=%d, fi=%d,dt=%d,fn=%d,ft=%d.",m_gid,fi,dt,fn,ft);										
 			if ((dt==YSF_DT_DATA_FR_MODE) || (dt==YSF_DT_VOICE_FR_MODE)) {
 				// Data packets go direct to modem
 				rtpNetwork->write(buffer);	
 			} else if (dt==YSF_DT_VD_MODE2) {
 				if (fi==YSF_FI_HEADER) {
-					m_not_busy=false;
-					m_rcv_callsign = getSrcYSF(buffer);
-					LogMessage("Received voice data *%s* from *%s*.",m_rcv_callsign.c_str(),m_current.c_str());
-					if (ft==6U) {
-						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-						else {
-							::memcpy(m_gps_buffer, dt1_temp, 10U);
-							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
+
+					if (m_open_channel && (!beacon_running)) {
+						tmp_str = getSrcYSF_fromHeader(buffer);
+						if (strcmp(tmp_str.c_str(),m_rcv_callsign.c_str())!=0) {
+							strcpy(alien_user,tmp_str.c_str());					
+							LogMessage("Received duplicate start from alien user %s.",alien_user);
+							return;
+						} else {
+							// double starting
+							strcpy(alien_user,"");
+							return;
 						}
+					} else strcpy(alien_user,"");
+
+					m_not_busy=false;
+					tmp_str = getSrcYSF_fromHeader(buffer);
+					if (!containsOnlyASCII(tmp_str)) return;
+					m_rcv_callsign=tmp_str;
+					m_gid = fich.getDGId();					
+					LogMessage("Received voice data *%s* from *%s*, gid=%d.",m_rcv_callsign.c_str(),m_current.c_str(),m_gid);
+					if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+					else {
+						::memcpy(m_gps_buffer, dt1_temp, 10U);
+						::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
 					}
 					m_gid = fich.getDGId();
 					m_conv.putDMRHeader();
@@ -1499,23 +1576,31 @@ CYSFPayload ysfPayload;
 				} else if (fi==YSF_FI_COMMUNICATIONS) {
 					// Test if late entry
 					if (m_open_channel==false) {
-					// if (m_rcv_callsign.empty()  || (strcmp(m_rcv_callsign.c_str(),"BEACON    ")==0)) {
-						if (ft==6U) {
-							if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-							else {
-								::memcpy(m_gps_buffer, dt1_temp, 10U);
-								::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
-							}
+						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+						else {
+							::memcpy(m_gps_buffer, dt1_temp, 10U);
+							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
 						}
-						//m_rcv_callsign = getSrcYSF(buffer);
+						// tmp_str = getSrcYSF(buffer);
+						// if (!containsOnlyASCII(tmp_str)) return;
+						m_rcv_callsign=getSrcYSF_fromData(buffer);
 						m_gid = fich.getDGId();
-						LogMessage("Late Entry from %s",m_rcv_callsign.c_str());
+						LogMessage("Late Entry from %s, gid=%d.",m_rcv_callsign.c_str(),m_gid);
+						strcpy(alien_user,"");
 						m_not_busy=false;
 						m_conv.putDMRHeader();
 						first_time = true;
 						m_open_channel=true;						
 					}
+
+					tmp_str = getSrcYSF_fromData(buffer);
+					if (strcmp(alien_user,tmp_str.c_str()) == 0) {
+						LogMessage("Voice Packet from alien user %s. Rejecting..",alien_user);
+						return;
+					}
+
 					// Update gps info for ft=6
+					silence_number = 0;
 					if ((ft==6) && (fn==6)) {
 						//show info once
 						if (first_time) {
@@ -1531,7 +1616,7 @@ CYSFPayload ysfPayload;
 							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
 						}						
 					}
-					m_rcv_callsign = getSrcYSF(buffer);
+					m_rcv_callsign = getSrcYSF_fromData(buffer);
 					// Update gps info for ft=7
 					if ((ft==7) && ((fn==6) || (fn==7))) {
 						if (fn==6) {
@@ -1541,49 +1626,71 @@ CYSFPayload ysfPayload;
 									LogMessage("GPS Info Empty. DMR Transcoding?");
 									LogMessage("Radio: %s.",get_radio(*(tmp+4)));
 									first_time = false;	
-								}									
-								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);							
-							}						
+								}								
+								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+								else {
+									::memcpy(m_gps_buffer, dt1_temp, 10U);
+									::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);									
+								}							
+							} else {
+									if (first_time) {
+									LogMessage("Radio: %s.",get_radio(*(tmp+4)));
+									//first_time = false;	
+								}								
+
+							}
+													
 						} else {
 							if ((*(tmp + 5U) != 0x00) || (*(tmp + 2U) != 0x62)) {
 								memcpy(m_gps_buffer,tmp,10U);
 								ysfPayload.readVDMode2Data(buffer + 35U, m_gps_buffer + 10U);
 								if (first_time) {
 									CUtils::dump("GPS Real info found",m_gps_buffer,20U);
-									LogMessage("Radio: %s.",get_radio(*(tmp+4)));
+									//LogMessage("Radio: %s.",get_radio(*(tmp+4)));
 									first_time = false;
 								}
-							}
+							} //else CUtils::dump("Fake info found",m_gps_buffer,20U);
 						}
 					}
 					m_conv.putVCH(buffer + 35U);
+					// m_open_channel=true;
+
 				} else if (fi==YSF_FI_TERMINATOR) {
+					tmp_str = getSrcYSF_fromData(buffer);
+					if (strcmp(alien_user,tmp_str.c_str()) == 0) {
+						LogMessage("EOT Packet from alien user %s. Rejecting..",alien_user);
+						return;
+					}
 					LogMessage("YSF EOT received");
 					//m_not_busy=true;
 					m_conv.putDMREOT(true);  // changed from false
+					m_open_channel = true;
 				}
 			}
+		} else {
+			CUtils::dump("Packet received from network not valid",buffer,155U);
 		}
 	}
 	m_lostTimer.start();
 }	
 
-
 void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
+	static bool start_silence = false;
 
 	// YSF Playback 
 	if ((m_ysfWatch.elapsed() > YSF_FRAME_PER) && (m_open_channel || (m_beacon_status!=BE_OFF))) {
 		// Playback YSF
-		::memset(m_ysfFrame+35U,0U,200U);
+		::memset(m_ysfFrame,0U,200U);
 		unsigned int ysfFrameType = m_conv.getYSF(m_ysfFrame + 35U);
 		
 		if(ysfFrameType == TAG_HEADER) {
+			start_silence = true;
 			//m_not_busy = false;
 			m_ysf_cnt = 0U;
+			silence_number=0;			
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_current.c_str(), YSF_CALLSIGN_LENGTH);
-//			else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 			m_ysfFrame[34U] = 0U; // Net frame counter
@@ -1610,28 +1717,27 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			CYSFPayload payload;
 			payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
-			//LogMessage("Header Playback");
+			LogMessage("Header Playback");
 			rptNetwork->write(m_ysfFrame);
 
 			m_ysf_cnt++;
 			m_ysfWatch.start();
 		}
 		else if (ysfFrameType == TAG_EOT) {
-			unsigned int fn = (m_ysf_cnt-1) % 8U;
-			// LogMessage("EOT Playback before: %d",fn);		
+			silence_number=0;
+			//unsigned int fn = (m_ysf_cnt-1) % 8U;		
 			
-			if (fn!=7) {
-			 	LogMessage("YSFPlayback fn=%d Adding %d blocks",fn,7-fn);
-			 	for (unsigned int i=0; i<(7U-fn);i++) 
-					m_conv.putDMRSilence();
-			 	m_conv.putDMREOT(false);
-				m_ysfWatch.start();
-			 	return;
-			}
+			// if (fn!=7) {
+			// // 	LogMessage("YSFPlayback fn=%d Adding %d blocks",fn,7-fn);
+			//  	for (unsigned int i=0; i<(7U-fn);i++) 
+			// 		m_conv.putDMRSilence();
+			//  	m_conv.putDMREOT(false);
+			// 	m_ysfWatch.start();
+			//  	return;
+			// }
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_current.c_str(), YSF_CALLSIGN_LENGTH);
-//			else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 			m_ysfFrame[34U] = (m_ysf_cnt & 0x7FU) <<1; // Net frame counter
@@ -1646,8 +1752,7 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 			fich.setFN(0U);
 			fich.setFT(7U);
 			fich.setDev(0U);
-			fich.setDT(YSF_DT_VD_MODE2);
-			//fich.setSQL(1U);			
+			fich.setDT(YSF_DT_VD_MODE2);			
 			fich.setDGId(m_gid);
 			fich.setMR(2U);
 			fich.encode(m_ysfFrame + 35U);
@@ -1659,10 +1764,13 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			CYSFPayload payload;
 			payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
-			//LogMessage("EOT Playback");
+			LogMessage("EOT Playback");
 			rptNetwork->write(m_ysfFrame);
 			m_not_busy=true;
 			m_open_channel=false;
+			start_silence = false;
+			strcpy(alien_user,"");
+			m_rcv_callsign = std::string("");			
 			if (m_beacon_status != BE_OFF) m_beacon_status = BE_OFF;		
 		}
 		else if (ysfFrameType == TAG_DATA) {
@@ -1670,10 +1778,9 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 			CYSFPayload ysfPayload;
 
 			unsigned int fn = (m_ysf_cnt - 1U) % 8U;
-
+			
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_current.c_str(), YSF_CALLSIGN_LENGTH);
-			//else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 
@@ -1704,7 +1811,7 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 					break;
 				default:
 					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)"          ");
-			}
+			} 
 
 			// Set the FICH
 			fich.setFI(YSF_FI_COMMUNICATIONS);
@@ -1728,6 +1835,16 @@ void CYSFGateway::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			m_ysf_cnt++;
 			m_ysfWatch.start();
+		} else {
+			if ((m_ysfWatch.elapsed() > (2*(YSF_FRAME_PER))) && start_silence) {
+					LogMessage("pipe_stalls, Inserting silence.");
+					m_conv.putDMRSilence();
+					silence_number++;
+					if (silence_number>5) {
+						LogMessage("Too many silence, Signal lost.");
+						m_conv.putDMREOT(true);
+					}
+				}
 		}
 	}	
 	
@@ -1846,21 +1963,40 @@ unsigned int CYSFGateway::findYSFID(std::string cs, bool showdst)
 	return id;
 }
 
-std::string CYSFGateway::getSrcYSF(const unsigned char* buffer)
-{
+std::string CYSFGateway::getSrcYSF_fromHeader(const unsigned char* buffer) {
 	unsigned char cbuffer[155U];
 	CYSFPayload ysfPayload;
 	std::string rcv_callsign;
-	char tmp[20];
+	char tmp[11U];
 	
 	::memcpy(cbuffer,buffer,155U);
 	ysfPayload.processHeaderData(cbuffer + 35U);
 	rcv_callsign=ysfPayload.getSource();
-	if (rcv_callsign.empty()) {
+	if (rcv_callsign.empty() || (!containsOnlyASCII(rcv_callsign))) {
 		::memcpy(tmp,cbuffer+14U,10U);
 		tmp[10U]=0;
 		rcv_callsign = std::string(tmp);
 	}
+	strcpy(tmp,rcv_callsign.c_str());
+//	LogMessage("Antes: %s",tmp);
+	unsigned int i=0;
+	while (i<strlen(tmp) && isalnum(tmp[i])) {
+		i++;
+	}
+	tmp[i]=0U;
+	rcv_callsign = std::string(tmp);
+	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+//	LogMessage("Despues: %s",tmp);	
+	return rcv_callsign;
+}
+
+std::string CYSFGateway::getSrcYSF_fromData(const unsigned char* buffer) {
+	std::string rcv_callsign;
+	char tmp[11U];
+
+	::memcpy(tmp,buffer+14U,10U);
+	tmp[10U]=0;
+	rcv_callsign = std::string(tmp);
 	strcpy(tmp,rcv_callsign.c_str());
 //	LogMessage("Antes: %s",tmp);
 	unsigned int i=0;
@@ -2192,17 +2328,20 @@ static bool first_time=true;
 					}
 					break;
 				case SEND_PTT:
-					if (m_not_busy && !m_wiresX->isBusy()) { //} && m_TGChange.elapsed() > 600) {
+				//	if (m_TGChange.elapsed() > 200) {				
+					if (m_not_busy && !m_wiresX->isBusy() && (m_TGChange.elapsed() > 600)) {
 						m_TGChange.start();
 						m_lostTimer.start();
 						m_TG_connect_state = TG_NONE;
 						if (m_ptt_dstid) {
-							LogMessage("Sending PTT: Src: %s Dst: %s%d", m_callsign.c_str(), m_ptt_pc ? "" : "TG ", m_ptt_dstid);
+							LogMessage("Sending PTT: Src: %s-%d Dst: %s%d", m_ysf_callsign.c_str(), m_srcid, m_ptt_pc ? "" : "TG ", m_ptt_dstid);
 							SendDummyDMR(m_srcid, m_ptt_dstid, m_ptt_pc ? FLCO_USER_USER : FLCO_GROUP);
 						}
-//						m_not_busy=true;
+						m_not_busy=true;
 					}
 					break;
+				case TG_NONE:
+				case WAITING_SEND_UNLINK:
 				default: 
 					break;
 			}
@@ -2531,6 +2670,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 
 						LogMessage("DMR received end of voice transmission, %.1f seconds", float(m_dmrFrames) / 16.667F);
 						m_conv.putDMREOT(true);
+						m_open_channel=true;
 						m_dmrNetwork->reset(2U);
 						m_networkWatchdog.stop();
 						m_dmrFrames = 0U;
@@ -2555,13 +2695,13 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 							//else m_netDst = std::string("TG") + std::to_string(DstId);
 						}
 						m_conv.putDMRHeader();
+						m_open_channel=true;
 						LogMessage("DMR audio received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
 						m_dmrinfo = true;
 						m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 						m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
 						m_dmrFrames = 0U;
 						m_firstSync = false;
-						m_open_channel=true;
 						m_not_busy = false;
 					}
 
@@ -2571,6 +2711,7 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 					if((DataType == DT_VOICE_SYNC || DataType == DT_VOICE) && m_firstSync) {
 						unsigned char dmr_frame[50];
 
+						silence_number = 0;
 						tx_dmrdata.getData(dmr_frame);
 						if (!m_dmrinfo) {
 							m_netDst = (netflco == FLCO_GROUP ? "TG " : "") + m_lookup->findCS(DstId);
@@ -2590,10 +2731,10 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 							m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 							m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
 							m_dmrinfo = true;
-							m_open_channel=true;
 						}
 
 						m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
+						m_open_channel=true;
 						m_not_busy = false;
 						m_dmrFrames++;
 					}
@@ -2601,10 +2742,12 @@ void CYSFGateway::DMR_get_Modem(unsigned int ms) {
 				else {
 					if(DataType == DT_VOICE_SYNC || DataType == DT_VOICE) {
 						unsigned char dmr_frame[50];
+
+						silence_number = 0;
 						tx_dmrdata.getData(dmr_frame);
 						m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
 						m_dmrFrames++;
-						if (m_open_channel == false) m_open_channel=true;
+						m_open_channel=true;
 						m_not_busy = false;
 					}
 					
