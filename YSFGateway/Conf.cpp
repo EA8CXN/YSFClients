@@ -124,7 +124,8 @@ m_mobileGPSPort(0U),
 m_remoteCommandsEnabled(false),
 m_remoteCommandsPort(6073U),
 m_newspath("/tmp/news"),
-m_beaconpath("/usr/local/sbin/beacon.amb")
+m_beaconpath("/usr/local/sbin/beacon.amb"),
+m_ysfDGID(0U)
 {
 }
 
@@ -297,7 +298,9 @@ bool CConf::read()
 		if (::strcmp(key, "Enable") == 0)
 			m_ysfNetworkEnabled = ::atoi(value) == 1;
 		else if (::strcmp(key, "Startup") == 0)
-			m_ysfStartup = (unsigned int)::atoi(value);			
+			m_ysfStartup = (unsigned int)::atoi(value);		
+		else if (::strcmp(key, "StartupDGID") == 0)
+			m_ysfDGID = (unsigned int)::atoi(value);					
 		else if (::strcmp(key, "Port") == 0)
 			m_ysfNetworkPort = (unsigned int)::atoi(value);
 		else if (::strcmp(key, "Hosts") == 0)
@@ -827,5 +830,10 @@ std::string CConf::getNewsPath() const
 std::string CConf::getBeaconPath() const
 {
 	return m_beaconpath;
+}
+
+unsigned int CConf::getStartupDGID() const
+{
+	return m_ysfDGID;
 }
 

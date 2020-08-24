@@ -74,7 +74,7 @@ enum WXPIC_STATUS {
 
 class CWiresX {
 public:
-	CWiresX(CWiresXStorage* storage, const std::string& callsign, CYSFNetwork* network, bool makeUpper);
+	CWiresX(CWiresXStorage* storage, const std::string& callsign, std::string& location, CYSFNetwork* network, bool makeUpper);
 	~CWiresX();
 	
 	WX_STATUS process(const unsigned char* data, const unsigned char* source, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);	
@@ -107,6 +107,7 @@ public:
 private:
 	CWiresXStorage*		m_storage;
 	std::string     m_callsign;
+	std::string     m_location;	
 	std::string     m_node;
 	CYSFNetwork*    m_network;
 	CReflectors*    m_reflectors;

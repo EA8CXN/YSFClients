@@ -89,10 +89,11 @@ const unsigned char UP_ACK[] = {0x47U, 0x30U, 0x5FU, 0x26U};
 
 
 
-CWiresX::CWiresX(CWiresXStorage* storage, const std::string& callsign, CYSFNetwork* network, bool makeUpper) :
+CWiresX::CWiresX(CWiresXStorage* storage, const std::string& callsign, std::string& location, CYSFNetwork* network, bool makeUpper) :
 //CThread(),
 m_storage(storage),
 m_callsign(callsign),
+m_location(location),
 //m_tgfile(tgfile),
 //m_reloadTime(reloadTime),
 m_node(),
@@ -145,6 +146,7 @@ error_upload(false)
 	m_node.resize(YSF_CALLSIGN_LENGTH, ' ');
 
 	m_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+	m_location.resize(14U, ' ');	
 
 	m_command = new unsigned char[1100U];
 
@@ -1368,22 +1370,22 @@ void CWiresX::sendLocalNewsReply()
 			data[i + offset + 16U] = ' ';
 
 		::sprintf((char*)(data + offset + 22U), "%03u", 1);
-
-
-			::sprintf((char*)(data + offset + 25U), "EA7EE     ");
-
-
-			::sprintf((char*)(data + offset + 35U), "Huelva        ");
+		for (unsigned int i = 0U; i < 10U; i++)
+				data[i + offset + 25U] = m_callsign.at(i);		
+		//::sprintf((char*)(data + offset + 25U), "EA7EE     ");
+		for (unsigned int i = 0U; i < 14U; i++)
+				data[i + offset + 35U] = m_location.at(i);		
+		//::sprintf((char*)(data + offset + 35U), "Huelva        ");
 
 		data[offset + 49U] = 0x0DU;
 		offset+=50U;
 
-	::LogMessage("Sending Local News Request");
+	//::LogMessage("Sending Local News Request");
 
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	//CUtils::dump("Local NEWS Reply", data, offset + 2U);
+	CUtils::dump("Local NEWS Reply", data, offset + 2U);
 	LogMessage("Local NEWS Reply");
 
 	createReply(data, offset + 2U, m_source.c_str());
