@@ -1,7 +1,7 @@
 /*
 *   Copyright (C) 2016,2017 by Jonathan Naylor G4KLX
 *   Copyright (C) 2018 by Andy Uribe CA6JAU
-*   Copyright (C) 2018 by Manuel Sanchez EA7EE
+*   Copyright (C) 2018,2020 by Manuel Sanchez EA7EE
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -36,6 +36,9 @@
 const unsigned char dt1_temp[] = {0x31, 0x22, 0x62, 0x5F, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00};
 const unsigned char dt2_temp[] = {0x00, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x1C, 0x20, 0x03, 0x08};
 unsigned char m_gps_buffer[20U];
+
+char std_ysf_radioid[] = {'H', '5', '0', '0', '0'};
+char ysf_radioid[5];
 
 CStreamer::CStreamer(CConf *conf) :
 m_conf(conf),
@@ -186,24 +189,24 @@ FLCO CStreamer::get_dmrflco(void){
 	return m_dmrflco;
 }  
 
-void CStreamer::createGPS(std::string m_callsign)
+void CStreamer::createGPS(std::string callsign)
 { 
 	if (m_conf->getAPRSEnabled()) {
 		std::string hostname 	= m_conf->getAPRSServer();
 		unsigned int port    	= m_conf->getAPRSPort();
 		std::string password 	= m_conf->getAPRSPassword();
-		std::string callsign 	= m_conf->getAPRSCallsign();
+		std::string tmp_callsign 	= m_conf->getAPRSCallsign();
 		std::string desc     	= m_conf->getAPRSDescription();
 		std::string icon        = m_conf->getAPRSIcon();
 		std::string beacon_text = m_conf->getAPRSBeaconText();
 		bool followMode			= m_conf->getAPRSFollowMe();
 		int beacon_time			= m_conf->getAPRSBeaconTime();	
 			
-		if (callsign.empty())
-			callsign = m_callsign;
+		if (tmp_callsign.empty())
+			tmp_callsign = callsign;
 		
 		LogMessage("APRS Parameters");
-		LogMessage("    Callsign: %s", callsign.c_str());
+		LogMessage("    Callsign: %s", tmp_callsign.c_str());
 		LogMessage("    Node Callsign: %s", m_callsign.c_str());
 		LogMessage("    Server: %s", hostname.c_str());
 		LogMessage("    Port: %u", port);
@@ -214,7 +217,7 @@ void CStreamer::createGPS(std::string m_callsign)
 		LogMessage("    Follow Mode: %s", followMode ? "yes" : "no");	
 		LogMessage("    Beacon Time: %d", beacon_time);	
 		
-		m_writer = new CAPRSWriter(callsign, password, hostname, port, followMode);
+		m_writer = new CAPRSWriter(tmp_callsign, password, hostname, port, followMode);
 
 		unsigned int txFrequency = m_conf->getTxFrequency();
 		unsigned int rxFrequency = m_conf->getRxFrequency();
@@ -262,8 +265,8 @@ void CStreamer::BeaconLogic(void) {
 	static bool first_time_b = true;
 	
 		// If Beacon time start voice beacon transmit
-		if (first_time_b || (m_not_busy && (m_beacon_Watch.elapsed()> (m_beacon_time*TIME_MIN)))) {
-			m_not_busy=false;
+		if (first_time_b || (m_not_busy && m_inacBeaconTimer->hasExpired() && (m_beacon_Watch.elapsed()> (m_beacon_time*TIME_MIN)))) {
+			//m_not_busy=false;
 			m_beacon_status = BE_INIT;
 			m_bea_voice_Watch.start();
 			m_beacon_Watch.start();
@@ -275,7 +278,6 @@ void CStreamer::BeaconLogic(void) {
 
 			switch (m_beacon_status) {
 				case BE_INIT:
-						//m_conv.reset();
 						m_rcv_callsign = "BEACON";
 						m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 						m_gid = 0;
@@ -291,7 +293,6 @@ void CStreamer::BeaconLogic(void) {
 						}
 						else {
 							LogMessage("Beacon Init: %s.",m_beacon_name.c_str());
-							//fread(buffer,4U,1U,file_out);
 							m_conv.putDMRHeader();							
 							m_beacon_status = BE_DATA;
 						}
@@ -302,17 +303,16 @@ void CStreamer::BeaconLogic(void) {
 						if (m_beacon_Watch.elapsed()>YSF_FRAME_PER) {
 							n=fread(buffer,1U,40U,m_file_out);
 							if (n>39U) {
-								m_conv.AMB2YSF(buffer);
-								m_conv.AMB2YSF(buffer+8U);
-								m_conv.AMB2YSF(buffer+16U);
-								m_conv.AMB2YSF(buffer+24U);
-								m_conv.AMB2YSF(buffer+32U);
+								m_conv.AMB2YSF_Mode2(buffer);
+								m_conv.AMB2YSF_Mode2(buffer+8U);
+								m_conv.AMB2YSF_Mode2(buffer+16U);
+								m_conv.AMB2YSF_Mode2(buffer+24U);
+								m_conv.AMB2YSF_Mode2(buffer+32U);
 							} else {
 								m_beacon_status = BE_EOT;
 								m_conv.putDMREOT(true);
 								if (m_file_out) fclose(m_file_out);
 								LogMessage("Beacon Out: %s.",m_beacon_name.c_str());
-
 							}
 							m_beacon_Watch.start();
 							m_bea_voice_Watch.start();
@@ -339,10 +339,10 @@ bool CStreamer::not_busy(void) {
     return m_not_busy;
 }
 
-bool CStreamer::change_TG(void){
-	bool tmp = m_change_TG;
+WX_STATUS CStreamer::change_TG(void){
+	WX_STATUS tmp = m_wx_returned;
 
-	m_change_TG = false;
+	m_wx_returned = WXS_NONE;
     return tmp;
 }		
 
@@ -363,11 +363,13 @@ void CStreamer::Init(CYSFNetwork *modemNetwork, CYSFNetwork* ysfNetwork, CFCSNet
 	m_open_channel=false;
 	m_data_ready=true;
 	m_unlinkReceived = false;
-	m_change_TG = false;
+	m_wx_returned = WXS_NONE;
 	memset(buffer, 0U, 2000U);
     if (m_ysfNetworkEnabled) m_ysfWatch.start();	
-	if (m_dmrNetworkEnabled) m_dmrWatch.start();    
-
+	if (m_dmrNetworkEnabled) m_dmrWatch.start(); 
+	//init radioid
+	memcpy(ysf_radioid,std_ysf_radioid,5U);   
+	m_inacBeaconTimer = new CTimer(1000U,30U);
 }
 
 CWiresX* CStreamer::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::string callsign, std::string location)
@@ -375,7 +377,7 @@ CWiresX* CStreamer::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::s
 	assert(rptNetwork != NULL);
 
 	m_storage = new CWiresXStorage(m_conf->getNewsPath());
-	m_wiresX = new CWiresX(m_storage, callsign, location, rptNetwork, makeUpper);
+	m_wiresX = new CWiresX(m_storage, callsign, location, rptNetwork, makeUpper, &m_conv);
 	m_dtmf = new CDTMF();
 	
 	std::string name = m_conf->getName();
@@ -385,67 +387,84 @@ CWiresX* CStreamer::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::s
 	
 	m_wiresX->setInfo(name, txFrequency, rxFrequency);
 	m_wiresX->start();
+	m_callsign = callsign;
 
     return m_wiresX;
 }
 
-void CStreamer::clock(unsigned int ms) {
-
+void CStreamer::clock(TG_STATUS m_TG_connect_state, unsigned int ms) {
+	CDMRData tx_dmrdata;
 	unsigned char token;
 
 		// Beacon processing
-		if (m_beacon) BeaconLogic();		
+		if (m_TG_connect_state != TG_DISABLE) {
+			if (m_beacon) BeaconLogic();		
 
-		// Put DMR Network Data
-		if (m_dmrNetworkEnabled) DMR_send_Network();
-		
-		// Get DMR network data
-		if (m_dmrNetworkEnabled) DMR_get_Modem(ms);
+			// Get DMR network data
+			if (m_dmrNetworkEnabled && ((m_TG_connect_state==TG_NONE) || (m_TG_connect_state==WAITING_UNLINK)) )	
+				while (m_dmrNetwork->read(tx_dmrdata) > 0U)
+					if (m_tg_type == DMR) DMR_get_Network(tx_dmrdata,ms);
+
+			// YSF Network receive and process		
+			while ((m_ysfNetwork != NULL) && (m_ysfNetwork->read(buffer) > 0U)) {
+				if (m_tg_type == YSF) GetFromNetwork(buffer,m_modemNetwork);
+			}
+
+			while ((m_fcsNetwork != NULL) && (m_fcsNetwork->read(buffer) > 0U)) {	
+				if (m_tg_type == FCS) GetFromNetwork(buffer,m_modemNetwork);
+			}
+
+			// Send to Network delayed data packets from modem
+			if ((m_tg_type==FCS) || (m_tg_type==YSF))
+				while (m_rpt_buffer.hasData()  && m_data_ready) {
+					m_rpt_buffer.getData(&token,1U);
+					//token to stop flow of data
+					if (token==0xFF) {
+						m_data_ready = false;
+						m_rpt_buffer.getData(buffer,155U);
+						token=0;
+						m_rpt_buffer.addData(&token,1U);
+						m_rpt_buffer.addData(buffer,155U);
+					} else {
+						m_rpt_buffer.getData(buffer,155U);
+						if ((m_ysfNetwork != NULL && (m_tg_type==YSF)) &&  ///!m_exclude) && 
+							(::memcmp(buffer + 0U, "YSFD", 4U) == 0)) {
+								m_ysfNetwork->write(buffer);
+							}
+						if ((m_fcsNetwork != NULL && (m_tg_type==FCS)) &&  ///!m_exclude) &&
+							(::memcmp(buffer + 0U, "YSFD", 4U) == 0)) {
+								m_fcsNetwork->write(buffer);
+							}
+					}			
+				}		
+
+			// Put DMR Network Data
+			if ((m_dmrNetworkEnabled) && (m_tg_type==DMR)) DMR_send_Network();
+
+			YSFPlayback(m_modemNetwork);    
+		} else {
+			// Get data
+			while ((m_ysfNetwork != NULL) && (m_ysfNetwork->read(buffer) > 0U));
+			while ((m_fcsNetwork != NULL) && (m_fcsNetwork->read(buffer) > 0U));
+			// Get DMR network data
+			if (m_dmrNetworkEnabled)	
+				while (m_dmrNetwork->read(tx_dmrdata) > 0U);		
+		}
 
 		// Get from modem and proccess data info		
-		GetFromModem(m_modemNetwork);
-		
-		// Send to Network delayed data packets from modem
-		while (m_rpt_buffer.hasData()  && m_data_ready) {
-			m_rpt_buffer.getData(&token,1U);
-			//token to stop flow of data
-			if (token==0xFF) {
-				m_data_ready = false;
-				m_rpt_buffer.getData(buffer,155U);
-				token=0;
-				m_rpt_buffer.addData(&token,1U);
-				m_rpt_buffer.addData(buffer,155U);
-			} else {
-				m_rpt_buffer.getData(buffer,155U);
-				if ((m_ysfNetwork != NULL && (m_tg_type==YSF)) &&  ///!m_exclude) && 
-					(::memcmp(buffer + 0U, "YSFD", 4U) == 0)) {
-						m_ysfNetwork->write(buffer);
-					}
-				if ((m_fcsNetwork != NULL && (m_tg_type==FCS)) &&  ///!m_exclude) &&
-					(::memcmp(buffer + 0U, "YSFD", 4U) == 0)) {
-						m_fcsNetwork->write(buffer);
-					}
-			}			
-		}		
-
-		// YSF Network receive and process		
-		while ((m_ysfNetwork != NULL) && (m_ysfNetwork->read(buffer) > 0U)) {
-			if (m_tg_type == YSF) GetFromNetwork(buffer,m_modemNetwork);
-		}
-
-		while ((m_fcsNetwork != NULL) && (m_fcsNetwork->read(buffer) > 0U)) {	
-			if (m_tg_type == FCS) GetFromNetwork(buffer,m_modemNetwork);
-		}
-
-        YSFPlayback(m_modemNetwork);    
+		GetFromModem(m_modemNetwork, m_TG_connect_state);
 
     	if (m_writer != NULL)
 			m_writer->clock(ms);
-		m_wiresX->clock(ms);    
+		
+		m_wiresX->clock(ms);   
+
+		if (m_inacBeaconTimer!=NULL) 
+			m_inacBeaconTimer->clock(ms); 
 }
 
 void CStreamer::AMBE_write(unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt) {
-	static char tmp[40];
+	static char tmp[40U];
 	static int count_file_AMBE=0;
 	static FILE *file;
 	static int ysfFrames;
@@ -484,14 +503,16 @@ void CStreamer::AMBE_write(unsigned char* buffer, unsigned char fi, unsigned cha
 
 unsigned char recv_buffer[2000U];
 
-void CStreamer::GetFromModem(CYSFNetwork* rptNetwork) {
-
+void CStreamer::GetFromModem(CYSFNetwork* rptNetwork, TG_STATUS m_TG_connect_state) {
 // unsigned char d_buffer[200];
 unsigned int len;
 unsigned char token;
+// unsigned char dch[20U];
+// unsigned char csd1[20U],csd2[20U];
+//WX_STATUS ret;
 	
 	while ((len=rptNetwork->read(recv_buffer)) > 0U) {
-		if (m_inactivityTimer!=NULL) m_inactivityTimer->start();		
+				
 		if (::memcmp(recv_buffer, "YSFD", 4U) != 0U) continue;
 		CYSFFICH fich;
 		bool valid = fich.decode(recv_buffer + 35U);
@@ -502,48 +523,92 @@ unsigned char token;
 			unsigned char ft = fich.getFT();
 			unsigned char bn = fich.getBN();
 			unsigned char bt = fich.getBT();
-			m_not_busy=false;
-			
-			if (m_NoChange) {
-				fich.setDGId(m_DGID);
-				fich.encode(recv_buffer + 35U);
+
+			if (fi == YSF_FI_HEADER) m_not_busy=false;
+			else if (fi == YSF_FI_TERMINATOR) {
+				if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
+				m_inacBeaconTimer->start();
 			}
 
-			if (m_saveAMBE) 
-				AMBE_write(recv_buffer, fi, dt, fn, ft, bn, bt);
+			if (m_TG_connect_state != TG_DISABLE) {
 
-			//LogMessage("Packet len= %d, fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d.",len,fi,dt,fn,ft,bn,bt);	
-			if (dt == YSF_DT_VOICE_FR_MODE) {
-				// flow not stop
-				token = 0x00;
-				m_data_ready = true;
-				m_rpt_buffer.addData(&token,1U);
-				m_rpt_buffer.addData(recv_buffer,len);
-			} else if (dt == YSF_DT_VD_MODE2) {
-				m_data_ready = true;
-				if (m_tg_type!=DMR) {
+				if (dt == YSF_DT_VD_MODE1) {
+					//LogMessage("Packet len= %d, fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d.",len,fi,dt,fn,ft,bn,bt);	
+					//CUtils::dump(1U,"Bloque DV1",recv_buffer,155U);
+					if (fi == YSF_FI_HEADER) 
+						m_ysf_callsign = getSrcYSF_fromHeader(recv_buffer);
+
+					//CYSFPayload payload;
+					//payload.readVDMode1Data(recv_buffer + 35U,dch);
+					//CUtils::dump(1U,"Bloque DCH",dch,20U);
+					m_wiresX->processVDMODE1(m_ysf_callsign,recv_buffer, fi, dt, fn, ft, bn, bt);
+					return;
+				}
+
+				// if (dt == YSF_DT_VD_MODE2) {
+				// 	LogMessage("Packet len= %d, fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d.",len,fi,dt,fn,ft,bn,bt);	
+				// 	//CUtils::dump(1U,"Bloque DV1",recv_buffer,155U);
+				// 	if (fi == YSF_FI_HEADER || fi == YSF_FI_TERMINATOR) {
+				// 	CYSFPayload payload;
+				// 	payload.readDataFRModeData1(recv_buffer + 35U,csd1);
+				// 	payload.readDataFRModeData2(recv_buffer + 35U,csd2);
+				// 	CUtils::dump(1U,"CSD1",csd1,20U);
+				// 	CUtils::dump(1U,"CSD2",csd2,20U);				
+				// 	} else {
+				// 	// 	m_ysf_callsign = getSrcYSF_fromHeader(recv_buffer);
+
+				// 	CYSFPayload payload;
+				// 	payload.readVDMode2Data(recv_buffer + 35U,dch);
+				// 	CUtils::dump(1U,"Bloque DCH",dch,20U);
+				// 	//ret = m_wiresX->processVDMODE1(m_ysf_callsign,recv_buffer, fi, dt, fn, ft, bn, bt);
+				// 	//if (ret == WXS_PLAY) m_open_channel = true;
+				// 	}
+				// 	return;
+				// }			
+				
+				if (m_NoChange) {
+					fich.setDGId(m_DGID);
+					fich.encode(recv_buffer + 35U);
+				}
+
+				if (m_saveAMBE) 
+					AMBE_write(recv_buffer, fi, dt, fn, ft, bn, bt);
+
+				//LogMessage("Packet len= %d, fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d.",len,fi,dt,fn,ft,bn,bt);	
+				if (dt == YSF_DT_VOICE_FR_MODE) {
 					// flow not stop
 					token = 0x00;
+					m_data_ready = true;
 					m_rpt_buffer.addData(&token,1U);
 					m_rpt_buffer.addData(recv_buffer,len);
-				}
-				else {
-					if (fi == YSF_FI_HEADER) {
-						m_ysf_callsign = getSrcYSF_fromHeader(recv_buffer);
-						m_dmrNetwork->reset(2U);	// OE1KBC fix
-						m_srcid = findYSFID(m_ysf_callsign, true);						
-						m_conv.putYSFHeader();
-						m_ysfFrames = 0U;
-					} else if (fi == YSF_FI_TERMINATOR) {
-						//LogMessage("Received YSF Communication from modem, %.1f seconds", float(m_ysfFrames) / 10.0F);				
-						m_conv.putYSFEOT();
-						m_ysfFrames = 0U;					
-					} else if (fi == YSF_FI_COMMUNICATIONS) {
-						m_conv.putYSF(recv_buffer + 35U);
-						m_ysfFrames++;							
+				} else if (dt == YSF_DT_VD_MODE2) {
+					m_data_ready = true;
+					if (m_tg_type!=DMR) {
+						// flow not stop
+						token = 0x00;
+						m_rpt_buffer.addData(&token,1U);
+						m_rpt_buffer.addData(recv_buffer,len);
 					}
-				}			
-			} else {
+					else {
+						if (fi == YSF_FI_HEADER) {
+							m_ysf_callsign = getSrcYSF_fromHeader(recv_buffer);
+							m_dmrNetwork->reset(2U);	// OE1KBC fix
+							m_srcid = findYSFID(m_ysf_callsign, true);						
+							m_conv.putYSFHeader();
+							m_ysfFrames = 0U;
+						} else if (fi == YSF_FI_TERMINATOR) {
+							//LogMessage("Received YSF Communication from modem, %.1f seconds", float(m_ysfFrames) / 10.0F);				
+							m_conv.putYSFEOT();
+							m_ysfFrames = 0U;					
+						} else if (fi == YSF_FI_COMMUNICATIONS) {
+							m_conv.putYSF(recv_buffer + 35U);
+							m_ysfFrames++;							
+						}
+					}			
+				} 
+			}
+			
+			if (dt == YSF_DT_DATA_FR_MODE) {
 					if (m_tg_type!=DMR) {
 
 						if (fi==YSF_FI_HEADER) {
@@ -701,6 +766,7 @@ CYSFPayload ysfPayload;
 				// Data packets go direct to modem
 				rtpNetwork->write(buffer);	
 			} else if (dt==YSF_DT_VD_MODE2) {
+
 				if (fi==YSF_FI_HEADER) {
 
 					if (m_open_channel && (!beacon_running)) {
@@ -715,6 +781,11 @@ CYSFPayload ysfPayload;
 							return;
 						}
 					} else strcpy(alien_user,"");
+
+					CYSFPayload payload;
+					unsigned char dch[20U];
+					payload.readVDMode1Data(buffer+35U,dch);
+					memcpy(ysf_radioid,dch+5U,5U);
 
 					m_not_busy=false;
 					tmp_str = getSrcYSF_fromHeader(buffer);
@@ -820,30 +891,35 @@ CYSFPayload ysfPayload;
 						return;
 					}
 					LogMessage("YSF EOT received");
-					//m_not_busy=true;
 					m_conv.putDMREOT(true);  // changed from false
 					m_open_channel = true;
 				}
 			}
-		} else {
-			CUtils::dump("Packet received from network not valid",buffer,155U);
-		}
+		} 
+		// else {
+		// 	CUtils::dump("Packet received from network not valid",buffer,155U);
+		// }
 	}
 	m_lostTimer->start();
 }	
 
 void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 	static bool start_silence = false;
+	unsigned char dch[20U];
+	unsigned char csd1[20U], csd2[20U];
+	unsigned int fn;
+	CYSFPayload payload;
+	CYSFFICH fich;
+	unsigned int ysfFrameType;
 
 	// YSF Playback 
 	if ((m_ysfWatch.elapsed() > YSF_FRAME_PER) && (m_open_channel || (m_beacon_status!=BE_OFF))) {
 		// Playback YSF
 		::memset(m_ysfFrame,0U,200U);
-		unsigned int ysfFrameType = m_conv.getYSF(m_ysfFrame + 35U);
+		ysfFrameType = m_conv.getYSF(m_ysfFrame + 35U);
 		
-		if(ysfFrameType == TAG_HEADER) {
+		if(ysfFrameType == TAG_HEADER || ysfFrameType == TAG_HEADERV1) {
 			start_silence = true;
-			//m_not_busy = false;
 			m_ysf_cnt = 0U;
 			silence_number=0;			
 
@@ -856,43 +932,41 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			CSync::addYSFSync(m_ysfFrame + 35U);
 
 			// Set the FICH
-			CYSFFICH fich;
 			fich.setFI(YSF_FI_HEADER);
 			fich.setCS(2U);
-			fich.setCM(0U);			
+			fich.setCM(1U);
+			fich.setBN(0U);
+			fich.setBT(0U);		
 			fich.setFN(0U);
 			fich.setFT(7U);
 			fich.setDev(0U);
-			fich.setDT(YSF_DT_VD_MODE2);			
+			fich.setMR(0U);
+			fich.setVoIP(false);			
+			if (ysfFrameType == TAG_HEADER) fich.setDT(YSF_DT_VD_MODE1);	
+			else fich.setDT(YSF_DT_VD_MODE2);	
 			fich.setDGId(m_gid);
-			fich.setMR(2U);
+			//fich.setMR(2U);
 			fich.encode(m_ysfFrame + 35U);
 
-			unsigned char csd1[20U], csd2[20U];
-			memset(csd1, '*', YSF_CALLSIGN_LENGTH);
-			memcpy(csd1 + YSF_CALLSIGN_LENGTH, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
-			memset(csd2 , ' ', YSF_CALLSIGN_LENGTH + YSF_CALLSIGN_LENGTH);
+			if (ysfFrameType == TAG_HEADER) {
+				memset(csd1, '*', YSF_CALLSIGN_LENGTH/2);
+				memcpy(csd1 + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);			
+				memcpy(csd1 + YSF_CALLSIGN_LENGTH, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				memset(csd2 , ' ', YSF_CALLSIGN_LENGTH + YSF_CALLSIGN_LENGTH);
+				payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
+			} else {
+				memset(dch,'*',YSF_CALLSIGN_LENGTH);
+				memcpy(dch+YSF_CALLSIGN_LENGTH,m_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+				payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
+			}
 
-			CYSFPayload payload;
-			payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
 			LogMessage("Header Playback");
 			rptNetwork->write(m_ysfFrame);
 
 			m_ysf_cnt++;
 			m_ysfWatch.start();
-		}
-		else if (ysfFrameType == TAG_EOT) {
+		} else if (ysfFrameType == TAG_EOT || ysfFrameType == TAG_EOTV1) {
 			silence_number=0;
-			//unsigned int fn = (m_ysf_cnt-1) % 8U;		
-			
-			// if (fn!=7) {
-			// // 	LogMessage("YSFPlayback fn=%d Adding %d blocks",fn,7-fn);
-			//  	for (unsigned int i=0; i<(7U-fn);i++) 
-			// 		m_conv.putDMRSilence();
-			//  	m_conv.putDMREOT(false);
-			// 	m_ysfWatch.start();
-			//  	return;
-			// }
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
@@ -903,40 +977,48 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			CSync::addYSFSync(m_ysfFrame + 35U);
 
 			// Set the FICH
-			CYSFFICH fich;
 			fich.setFI(YSF_FI_TERMINATOR);
 			fich.setCS(2U);
-			fich.setCM(0U);							
+			fich.setCM(1U);
+			fich.setBN(0U);
+			fich.setBT(0U);						
 			fich.setFN(0U);
 			fich.setFT(7U);
 			fich.setDev(0U);
-			fich.setDT(YSF_DT_VD_MODE2);			
+			fich.setMR(0U);
+			fich.setVoIP(false);			
+			if (ysfFrameType == TAG_HEADER) fich.setDT(YSF_DT_VD_MODE1);	
+			else fich.setDT(YSF_DT_VD_MODE2);				
 			fich.setDGId(m_gid);
-			fich.setMR(2U);
 			fich.encode(m_ysfFrame + 35U);
 
-			unsigned char csd1[20U], csd2[20U];
-			memset(csd1, '*', YSF_CALLSIGN_LENGTH);
-			memcpy(csd1 + YSF_CALLSIGN_LENGTH, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
-			memset(csd2, ' ', YSF_CALLSIGN_LENGTH + YSF_CALLSIGN_LENGTH);				
+			if (ysfFrameType == TAG_HEADER) {
+				memset(csd1, '*', YSF_CALLSIGN_LENGTH);
+				memcpy(csd1 + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);			
+				memcpy(csd1 + YSF_CALLSIGN_LENGTH, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				memset(csd2 , ' ', YSF_CALLSIGN_LENGTH + YSF_CALLSIGN_LENGTH);
+				payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
+			} else {
+				memset(dch,'*',YSF_CALLSIGN_LENGTH);
+				memcpy(dch+YSF_CALLSIGN_LENGTH,m_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+				payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
+			}
 
-			CYSFPayload payload;
-			payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
 			LogMessage("EOT Playback");
 			rptNetwork->write(m_ysfFrame);
-			m_not_busy=true;
+
 			m_open_channel=false;
 			start_silence = false;
 			strcpy(alien_user,"");
 			m_rcv_callsign = std::string("");			
 			if (m_beacon_status != BE_OFF) m_beacon_status = BE_OFF;
-			m_conv.reset();		
-		}
-		else if (ysfFrameType == TAG_DATA) {
-			CYSFFICH fich;
-			CYSFPayload ysfPayload;
+			m_not_busy = true;
+			m_inacBeaconTimer->start();
+			memcpy(ysf_radioid,std_ysf_radioid,5U);
+			m_conv.reset();	
 
-			unsigned int fn = (m_ysf_cnt - 1U) % 8U;
+		} else if (ysfFrameType == TAG_DATA || ysfFrameType == TAG_DATAV1) {
+			fn = (m_ysf_cnt - 1U) % 8U;
 			
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
@@ -945,42 +1027,59 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			// Add the YSF Sync
 			CSync::addYSFSync(m_ysfFrame + 35U);
-			switch (fn) {
-				case 0:
-					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)"**********");
-					break;
-				case 1:
-					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_rcv_callsign.c_str());
-					break;
-				case 2:
-					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_netDst.c_str());
-					break; 						
-				case 6:
-					if ((m_tg_type == DMR) && (m_beacon_status == BE_OFF)) {
-						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-						else {
-							::memcpy(m_gps_buffer, dt1_temp, 10U);
-							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
-						}
+
+			if (ysfFrameType == TAG_DATA) {
+					switch (fn) {
+						case 0:
+							// ***key
+							memset(dch, '*', YSF_CALLSIGN_LENGTH/2);
+							memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);				
+							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
+							break;
+						case 1:
+							//Callsign
+							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_rcv_callsign.c_str());
+							break;
+						case 5:
+							memset(dch, ' ', YSF_CALLSIGN_LENGTH/2);
+							memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);
+							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
+							break;									
+						case 6:
+							if ((m_tg_type == DMR) && (m_beacon_status == BE_OFF)) {
+								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+								else {
+									::memcpy(m_gps_buffer, dt1_temp, 10U);
+									::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
+								}
+							}
+							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*) m_gps_buffer); 
+							break;
+						case 7:
+							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*) m_gps_buffer + 10U);
+							break;
+						default:
+							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)"          ");
 					}
-					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*) m_gps_buffer); 
-					break;
-				case 7:
-					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*) m_gps_buffer + 10U);
-					break;
-				default:
-					ysfPayload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)"          ");
-			} 
+			} else {
+					m_wiresX->getMode1DCH(dch,fn);
+					payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
+			}
 
 			// Set the FICH
 			fich.setFI(YSF_FI_COMMUNICATIONS);
 			fich.setCS(2U);
-			fich.setCM(0U);						
+			fich.setCM(1U);
+			fich.setBN(0U);
+			fich.setBT(0U);								
 			fich.setFN(fn);
 			fich.setFT(7U);
 			fich.setDev(0U);
-			fich.setDT(YSF_DT_VD_MODE2);		
-			fich.setMR(YSF_MR_BUSY);
+			fich.setMR(0U);
+			fich.setVoIP(false);			
+			if (ysfFrameType == TAG_HEADER) fich.setDT(YSF_DT_VD_MODE1);	
+			else fich.setDT(YSF_DT_VD_MODE2);		
+			//fich.setMR(YSF_MR_BUSY);
 			fich.setDGId(m_gid);
 
 			//CUtils::dump("Data b",m_ysfFrame,155U);			
@@ -1009,139 +1108,135 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 	
 }
 
-void CStreamer::DMR_get_Modem(unsigned int ms) {
-	CDMRData tx_dmrdata;	
+void CStreamer::DMR_get_Network(CDMRData tx_dmrdata, unsigned int ms) {	
 
-		while (m_dmrNetwork->read(tx_dmrdata) > 0U)  {
-			//if (((m_TG_connect_state==TG_NONE) || (m_TG_connect_state==WAITING_UNLINK)) && 
-			if ((m_tg_type==DMR) && !m_wiresX->isBusy()) {
-				unsigned int SrcId = tx_dmrdata.getSrcId();
-				unsigned int DstId = tx_dmrdata.getDstId();
+	if ((m_tg_type==DMR) && !m_wiresX->isBusy()) {
+		unsigned int SrcId = tx_dmrdata.getSrcId();
+		unsigned int DstId = tx_dmrdata.getDstId();
+		
+		if (m_beacon_status==BE_DATA) {
+			if (m_file_out) fclose(m_file_out);
+			LogMessage("Beacon Break.");
+			m_conv.putDMREOT(true);
+			m_beacon_Watch.start();
+			m_beacon_status = BE_OFF;
+			m_open_channel=true;
+		}
+		FLCO netflco = tx_dmrdata.getFLCO();
+		unsigned char DataType = tx_dmrdata.getDataType();
+
+		if (!tx_dmrdata.isMissing()) {
+			m_networkWatchdog.start();
+
+			if(DataType == DT_TERMINATOR_WITH_LC) {
+				if (m_dmrFrames == 0U) {
+					m_dmrNetwork->reset(2U);
+					m_networkWatchdog.stop();
+					m_dmrinfo = false;
+					m_firstSync = false;
+					return;
+				}
 				
-				if (m_beacon_status==BE_DATA) {
-					if (m_file_out) fclose(m_file_out);
-					LogMessage("Beacon Break.");
-					m_conv.putDMREOT(true);
-					m_beacon_Watch.start();
-					m_beacon_status = BE_OFF;
-					m_open_channel=true;
-				}
-				FLCO netflco = tx_dmrdata.getFLCO();
-				unsigned char DataType = tx_dmrdata.getDataType();
+				if (!m_unlinkReceived && ((SrcId == 4000U) || (SrcId==m_dstid)))
+					m_unlinkReceived = true;
 
-				if (!tx_dmrdata.isMissing()) {
-					m_networkWatchdog.start();
-
-					if(DataType == DT_TERMINATOR_WITH_LC) {
-						if (m_dmrFrames == 0U) {
-							m_dmrNetwork->reset(2U);
-							m_networkWatchdog.stop();
-							m_dmrinfo = false;
-							m_firstSync = false;
-							break;
-						}
-						
-						if (!m_unlinkReceived && ((SrcId == 4000U) || (SrcId==m_dstid)))
-							m_unlinkReceived = true;
-
-						LogMessage("DMR received end of voice transmission, %.1f seconds", float(m_dmrFrames) / 16.667F);
-						m_conv.putDMREOT(true);
-						m_open_channel=true;
-						m_dmrNetwork->reset(2U);
-						m_networkWatchdog.stop();
-						m_dmrFrames = 0U;
-						m_dmrinfo = false;
-						m_firstSync = false;
-						//m_not_busy = true;
-					}
-
-					if((DataType == DT_VOICE_LC_HEADER) && (DataType != m_dmrLastDT)) {
-						m_gid = 0;
-						m_netDst = (netflco == FLCO_GROUP ? "TG " : "") + m_lookup->findCS(DstId);
-						if (SrcId == 9990U)
-							m_rcv_callsign = "PARROT";
-						else if (SrcId == 9U)
-							m_rcv_callsign = "LOCAL";
-						else if (SrcId == 4000U)
-							m_rcv_callsign = "UNLINK";
-						else {
-							m_rcv_callsign = m_lookup->findCS(SrcId);							
-							CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
-							if (tmp_ref) m_netDst = tmp_ref->m_name;
-							//else m_netDst = std::string("TG") + std::to_string(DstId);
-						}
-						m_conv.putDMRHeader();
-						m_open_channel=true;
-						LogMessage("DMR audio received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
-						m_dmrinfo = true;
-						m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
-						m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
-						m_dmrFrames = 0U;
-						m_firstSync = false;
-						m_not_busy = false;
-					}
-
-					if(DataType == DT_VOICE_SYNC)
-						m_firstSync = true;
-
-					if((DataType == DT_VOICE_SYNC || DataType == DT_VOICE) && m_firstSync) {
-						unsigned char dmr_frame[50];
-
-						silence_number = 0;
-						tx_dmrdata.getData(dmr_frame);
-						if (!m_dmrinfo) {
-							m_netDst = (netflco == FLCO_GROUP ? "TG " : "") + m_lookup->findCS(DstId);
-							if (SrcId == 9990U)
-								m_rcv_callsign = "PARROT";
-							else if (SrcId == 9U)
-								m_rcv_callsign = "LOCAL";
-							else if (SrcId == 4000U)
-								m_rcv_callsign = "UNLINK";
-							else{
-								m_rcv_callsign = m_lookup->findCS(SrcId);															
-								CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
-								if (tmp_ref) m_netDst = tmp_ref->m_name;
-								//else m_netDst = "UNKNOW";
-							}
-							LogMessage("DMR audio late entry received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
-							m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
-							m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
-							m_dmrinfo = true;
-						}
-
-						m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
-						m_open_channel=true;
-						m_not_busy = false;
-						m_dmrFrames++;
-					}
-				}
-				else {
-					if(DataType == DT_VOICE_SYNC || DataType == DT_VOICE) {
-						unsigned char dmr_frame[50];
-
-						silence_number = 0;
-						tx_dmrdata.getData(dmr_frame);
-						m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
-						m_dmrFrames++;
-						m_open_channel=true;
-						m_not_busy = false;
-					}
-					
-					m_networkWatchdog.clock(ms);
-					if (m_networkWatchdog.hasExpired()) {
-						LogDebug("Network watchdog has expired, %.1f seconds", float(m_dmrFrames) / 16.667F);
-						m_dmrNetwork->reset(2U);
-						m_conv.reset();
-						m_networkWatchdog.stop();
-						m_dmrFrames = 0U;
-						m_dmrinfo = false;
-						m_not_busy = true;
-					}
-				}
-			m_dmrLastDT = DataType;
-			m_lostTimer->start();
+				LogMessage("DMR received end of voice transmission, %.1f seconds", float(m_dmrFrames) / 16.667F);
+				m_conv.putDMREOT(true);
+				m_open_channel=true;
+				m_dmrNetwork->reset(2U);
+				m_networkWatchdog.stop();
+				m_dmrFrames = 0U;
+				m_dmrinfo = false;
+				m_firstSync = false;
+				//m_not_busy = true;
 			}
-		}		
+
+			if((DataType == DT_VOICE_LC_HEADER) && (DataType != m_dmrLastDT)) {
+				m_gid = 0;
+				m_netDst = (netflco == FLCO_GROUP ? "TG " : "") + m_lookup->findCS(DstId);
+				if (SrcId == 9990U)
+					m_rcv_callsign = "PARROT";
+				else if (SrcId == 9U)
+					m_rcv_callsign = "LOCAL";
+				else if (SrcId == 4000U)
+					m_rcv_callsign = "UNLINK";
+				else {
+					m_rcv_callsign = m_lookup->findCS(SrcId);							
+					CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
+					if (tmp_ref) m_netDst = tmp_ref->m_name;
+					//else m_netDst = std::string("TG") + std::to_string(DstId);
+				}
+				m_conv.putDMRHeader();
+				m_open_channel=true;
+				LogMessage("DMR audio received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
+				m_dmrinfo = true;
+				m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+				m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
+				m_dmrFrames = 0U;
+				m_firstSync = false;
+				m_not_busy = false;
+			}
+
+			if(DataType == DT_VOICE_SYNC)
+				m_firstSync = true;
+
+			if((DataType == DT_VOICE_SYNC || DataType == DT_VOICE) && m_firstSync) {
+				unsigned char dmr_frame[50];
+
+				silence_number = 0;
+				tx_dmrdata.getData(dmr_frame);
+				if (!m_dmrinfo) {
+					m_netDst = (netflco == FLCO_GROUP ? "TG " : "") + m_lookup->findCS(DstId);
+					if (SrcId == 9990U)
+						m_rcv_callsign = "PARROT";
+					else if (SrcId == 9U)
+						m_rcv_callsign = "LOCAL";
+					else if (SrcId == 4000U)
+						m_rcv_callsign = "UNLINK";
+					else{
+						m_rcv_callsign = m_lookup->findCS(SrcId);															
+						CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
+						if (tmp_ref) m_netDst = tmp_ref->m_name;
+						//else m_netDst = "UNKNOW";
+					}
+					LogMessage("DMR audio late entry received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
+					m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+					m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
+					m_dmrinfo = true;
+				}
+
+				m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
+				m_open_channel=true;
+				m_not_busy = false;
+				m_dmrFrames++;
+			}
+		}
+		else {
+			if(DataType == DT_VOICE_SYNC || DataType == DT_VOICE) {
+				unsigned char dmr_frame[50];
+
+				silence_number = 0;
+				tx_dmrdata.getData(dmr_frame);
+				m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
+				m_dmrFrames++;
+				m_open_channel=true;
+				m_not_busy = false;
+			}
+			
+			m_networkWatchdog.clock(ms);
+			if (m_networkWatchdog.hasExpired()) {
+				LogDebug("Network watchdog has expired, %.1f seconds", float(m_dmrFrames) / 16.667F);
+				m_dmrNetwork->reset(2U);
+				m_conv.reset();
+				m_networkWatchdog.stop();
+				m_dmrFrames = 0U;
+				m_dmrinfo = false;
+				m_not_busy = true;
+			}
+		}
+	m_dmrLastDT = DataType;
+	m_lostTimer->start();
+	}		
 }
 
 void CStreamer::DMR_send_Network(void) {
@@ -1149,7 +1244,7 @@ static unsigned int m_fill=0;
 static unsigned int m_actual_step = 0;
 static bool sending_silence=false;
 	
-	if ((m_tg_type==DMR) && (m_dmrNetwork!=NULL) && (m_dmrWatch.elapsed() > DMR_FRAME_PER)) {			
+	if ((m_dmrNetwork!=NULL) && (m_dmrWatch.elapsed() > DMR_FRAME_PER)) {			
 		unsigned int dmrFrameType = m_conv.getDMR(m_dmrFrame);
 		if (sending_silence) {
 			CDMRData rx_dmrdata;
@@ -1279,6 +1374,7 @@ static bool sending_silence=false;
 				rx_dmrdata.setBER(0U);
 				rx_dmrdata.setRSSI(0U);
 				rx_dmrdata.setDataType(DT_VOICE_LC_HEADER);
+				memcpy(ysf_radioid,std_ysf_radioid,5U);
 
 				// Add sync
 				CSync::addDMRDataSync(m_dmrFrame, 0);
@@ -1528,7 +1624,16 @@ void CStreamer::processWiresX(const unsigned char* buffer, unsigned char fi, uns
 			LogMessage("Callsign connect: %s",m_ysf_callsign.c_str());
 			m_srcid = findYSFID(m_ysf_callsign, true);
 			m_dstid = m_wiresX->getDstID(); 
-			m_change_TG = true;
+			m_wx_returned = WXS_CONNECT;
+		}
+		break;
+		case WXS_PLAY: {
+			LogMessage("Opening channel..");
+			m_open_channel = true;
+		}
+		break;
+		case WXS_DISCONNECT: {
+			m_wx_returned = WXS_DISCONNECT;
 		}
 		break;
 		default:
@@ -1555,7 +1660,7 @@ void CStreamer::processDTMF(unsigned char* buffer, unsigned char dt)
 			m_srcid = findYSFID(m_ysf_callsign, true);			
 			std::string id = m_dtmf->getReflector();
 			m_dstid = atoi(id.c_str());
-			m_change_TG = true;			
+			//m_change_TG = true;			
 		}
 		break;
 		default:
@@ -1605,6 +1710,28 @@ void CStreamer::SendDummyDMR(unsigned int srcid,unsigned int dstid, FLCO dmr_flc
 		dmr_cnt++;
 	}
 
+	// // Build DMR TermLC
+	// dmrdata.setSeqNo(dmr_cnt);
+	// dmrdata.setDataType(DT_VOICE_SYNC);
+
+	// // Add sync
+	// CSync::addDMRDataSync(m_dmrFrame, 0);
+
+	// // Add SlotType
+	// slotType.setColorCode(m_colorcode);
+	// slotType.setDataType(DT_VOICE_SYNC);
+	// slotType.getData(m_dmrFrame);
+
+	// // Full LC for TermLC frame
+	// fullLC.encode(dmrLC, m_dmrFrame, DT_VOICE_SYNC);
+
+	// dmrdata.setData(m_dmrFrame);
+
+	// // Send DMR TermLC
+	// m_dmrNetwork->write(dmrdata);
+
+
+
 	// Build DMR TermLC
 	dmrdata.setSeqNo(dmr_cnt);
 	dmrdata.setDataType(DT_TERMINATOR_WITH_LC);
@@ -1634,7 +1761,9 @@ void CStreamer::SendDummyYSF(CYSFNetwork *ysf_network, unsigned int dg_id)
 	unsigned char m_ysf_cnt,i;
 	unsigned char csd1[20U], csd2[20U];
 	CYSFPayload payload;
-	CYSFFICH fich;			
+	CYSFFICH fich;		
+
+	if (dg_id == 0) return;	
 
 	if (m_ysf_callsign.empty()) {
 		m_ysf_callsign = m_conf->getCallsign();

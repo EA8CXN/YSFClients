@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2010-2014,2016,2017,2018 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2010-2014,2016,2017,2018,2020 by Jonathan Naylor G4KLX
  *   Copyright (C) 2019 by Manuel Sanchez EA7EE
  *   Copyright (C) 2018 by Andy Uribe CA6JAU 
  *
@@ -214,6 +214,8 @@ void CAPRSWriter::clock(unsigned int ms)
 {
 	m_idTimer.clock(ms);
 
+	m_thread->clock(ms);
+
     if ((m_idTimer.getTimer()>10U) && first_time) {
 		sendIdFrameFixed();
 		first_time=false;
@@ -324,9 +326,9 @@ void CAPRSWriter::sendIdFrameMobile()
 	if (pLatitude == NULL || pLongitude == NULL || pAltitude == NULL)
 		return;
 
-	float rawLatitude  = ::atof(pLatitude);
-	float rawLongitude = ::atof(pLongitude);
-	float rawAltitude  = ::atof(pAltitude);
+	float rawLatitude  = float(::atof(pLatitude));
+	float rawLongitude = float(::atof(pLongitude));
+	float rawAltitude  = float(::atof(pAltitude));
 
 	double tempLat  = ::fabs(rawLatitude);
 	double tempLong = ::fabs(rawLongitude);
@@ -350,8 +352,8 @@ void CAPRSWriter::sendIdFrameMobile()
 		lon, (rawLongitude < 0.0F) ? 'W' : 'E',m_icon.at(1));
 
 	if (pBearing != NULL && pVelocity != NULL) {
-		float rawBearing   = ::atof(pBearing);
-		float rawVelocity  = ::atof(pVelocity);
+		float rawBearing   = float(::atof(pBearing));
+		float rawVelocity  = float(::atof(pVelocity));
 
 		::sprintf(output + ::strlen(output), "%03.0f/%03.0f", rawBearing, rawVelocity * 0.539957F);
 	}

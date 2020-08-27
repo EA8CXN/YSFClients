@@ -1,6 +1,6 @@
 /*
 *   Copyright (C) 2016,2017 by Jonathan Naylor G4KLX
-*   Copyright (C) 2019 by Manuel Sanchez EA7EE
+*   Copyright (C) 2019,2020 by Manuel Sanchez EA7EE
 *   Copyright (C) 2018,2019 by Andy Uribe CA6JAU
 *
 *   This program is free software; you can redistribute it and/or modify
@@ -21,6 +21,7 @@
 #include "Storage.h"
 #include "WiresX.h"
 #include "YSFPayload.h"
+#include "Reflectors.h"
 #include "YSFFICH.h"
 #include "Utils.h"
 #include "Sync.h"
@@ -38,7 +39,9 @@
 #include <cstdlib>
 #include <cassert>
 #include <cstring>
-#include <cctype>							
+#include <cctype>	
+
+#define MAX_PATH_NAME 100U
 						
 CWiresXStorage::CWiresXStorage(std::string path_news) :
 m_callsign(),
@@ -55,11 +58,34 @@ CWiresXStorage::~CWiresXStorage()
 
 }
 
+void CWiresXStorage::UpdateReflectorType(unsigned int type) {
+	switch (type) {
+		case YSF:
+			strcpy(m_reflector_type,"YSF");
+			break;
+		case DMR:
+			strcpy(m_reflector_type,"DMR");
+			break;
+		case FCS:
+			strcpy(m_reflector_type,"FCS");
+			break;
+		case P25:
+			strcpy(m_reflector_type,"P25");
+			break;
+		case NXDN:
+			strcpy(m_reflector_type,"NXD");
+			break;			
+		default:
+			strcpy(m_reflector_type,"YSF");
+			break;								
+	}
+}
+
 void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 {
 	FILE *file;
 	char record[180U];  // records are 83 bytes long
-	char index_str[80U];
+	char index_str[MAX_PATH_NAME];
 	char tmp[6];
 	char destino[6];
 	struct stat buffer;
@@ -78,23 +104,23 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 	::memcpy(destino,reg->to,5);
 	destino[5]=0;
 	::strcpy(m_source,destino);
-	::sprintf(index_str,"%s/%s",m_newspath.c_str(),destino);
+	::sprintf(index_str,"%s/%s%s",m_newspath.c_str(),m_reflector_type,destino);
 	
 	if (stat (index_str, &buffer) != 0) {
 		status = mkdir(index_str, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (status != 0) { 
-				::LogMessage("Cannot create news directory for destination: %s.",destino);
+				::LogMessage("Cannot create news directory for destination: %s%s.",m_reflector_type,destino);
 				return;		
 		}
 	}
 	
 	::strcat(index_str,"/INDEX.DAT");
 	if (stat (index_str, &buffer) == 0) {
-		::LogMessage("Found index file for %s.",destino);
+		::LogMessage("Found index file for %s%s.",m_reflector_type,destino);
 		file = fopen(index_str,"ab");
 	}
 	else {
-		::LogMessage("Created index file for %s.",destino);		
+		::LogMessage("Created index file for %s%s.",m_reflector_type,destino);		
 		file = fopen(index_str,"wb");
 		number=1U;
 	}	
@@ -122,7 +148,7 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 	reg->number=number;
 	
 	if (reg->type[0]=='T') {
-		::sprintf(index_str,"%s/%s/%05u.DAT",m_newspath.c_str(),destino,number);	
+		::sprintf(index_str,"%s/%s%s/%05u.DAT",m_newspath.c_str(),m_reflector_type,destino,number);	
 		file = fopen(index_str,"wb");
 		if (!file) {
 			LogMessage("Error writing message file: %s",index_str);
@@ -140,7 +166,7 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 
 void CWiresXStorage::StorePicture(unsigned const char* data, unsigned const char* source, unsigned int gps)
 {
-	char index_str[80U];
+	char index_str[MAX_PATH_NAME];
 	char destino[6];
 	struct stat buffer;
 	unsigned int number,off;
@@ -170,12 +196,12 @@ void CWiresXStorage::StorePicture(unsigned const char* data, unsigned const char
 	
 	::memcpy(destino,data+off+30U,5U);
 	destino[5]=0;	
-	::sprintf(index_str,"%s/%s",m_newspath.c_str(),destino);
+	::sprintf(index_str,"%s/%s%s",m_newspath.c_str(),m_reflector_type,destino);
 	
 	if (stat (index_str, &buffer) != 0) {
 		status = mkdir(index_str, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (status != 0) { 
-			::LogMessage("Cannot create news directory for destination: %s.",destino);
+			::LogMessage("Cannot create news directory for destination: %s%s.",m_reflector_type,destino);
 			return;		
 		}
 	}
@@ -192,7 +218,7 @@ void CWiresXStorage::StorePicture(unsigned const char* data, unsigned const char
 	::memcpy(m_reg_picture->subject,data+off+45U,16U);
 	::memcpy(m_reg_picture->token,data+off,6U);
 
-	::sprintf(index_str,"%s/%s/%05u.JPG",m_newspath.c_str(),destino,number);
+	::sprintf(index_str,"%s/%s%s/%05u.JPG",m_newspath.c_str(),m_reflector_type,destino,number);
 	std::string file_name(index_str);
 	m_picture_name = file_name;
 	m_picture_file = fopen(index_str,"wb");
@@ -230,7 +256,7 @@ void CWiresXStorage::AddPictureData(const unsigned char *data, unsigned int size
 unsigned int CWiresXStorage::GetList(unsigned char *data, unsigned int type, unsigned char *source, unsigned int start)
 { 
 	FILE *file;
-	char index_str[80U];	
+	char index_str[MAX_PATH_NAME];	
 	char record[83U];  // records are 83 bytes long
 	char f_type[3U];
 	unsigned int items,n,offset,count;
@@ -246,7 +272,7 @@ unsigned int CWiresXStorage::GetList(unsigned char *data, unsigned int type, uns
 	char tmp[6];
 	::memcpy(tmp,source,5U);
 	tmp[5]=0;
-	::sprintf(index_str,"%s/%s/INDEX.DAT",m_newspath.c_str(),tmp);	
+	::sprintf(index_str,"%s/%s%s/INDEX.DAT",m_newspath.c_str(),m_reflector_type,tmp);	
 	file = fopen(index_str,"rb");
 	if (!file) {
 		LogMessage("Error getting index file: %s",index_str);
@@ -311,21 +337,21 @@ void CWiresXStorage::StoreTextMessage(unsigned const char* data, unsigned const 
 
 unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number, unsigned char *source) {
 	FILE *file;
-	char file_name[80U];
-	char index_str[80U];
+	char file_name[MAX_PATH_NAME];
+	char index_str[MAX_PATH_NAME];
 	char record[83U];  // records are 83 bytes long	
+	char tmp[20U];
 	struct stat buffer;
-	unsigned int n;
-	char tmp[6];
+	unsigned int n,offset;
 	
 	::memcpy(tmp,source,5U);
 	tmp[5]=0;
-	::sprintf(file_name,"%s/%s/%05u.JPG",m_newspath.c_str(),tmp,number);
+	::sprintf(file_name,"%s/%s%s/%05u.JPG",m_newspath.c_str(),m_reflector_type,tmp,number);
 	if (stat (file_name, &buffer) < 0) {
-		::sprintf(file_name,"%s/%s/%05u.AMB",m_newspath.c_str(),tmp,number);
+		::sprintf(file_name,"%s/%s%s/%05u.AMB",m_newspath.c_str(),m_reflector_type,tmp,number);
 		if (stat (file_name, &buffer) < 0) {		
 			data[0]='T';
-			::sprintf(file_name,"%s/%s/%05u.DAT",m_newspath.c_str(),tmp,number);
+			::sprintf(file_name,"%s/%s%s/%05u.DAT",m_newspath.c_str(),m_reflector_type,tmp,number);
 			if ((file=fopen(file_name,"rb"))==0) {
 				LogMessage("Error getting data file: %s",file_name);
 				return 0U;
@@ -344,13 +370,42 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 			} 
 		else {
 			data[0]='V';
+			strcpy((char *)(data+1),file_name);
+
+			::sprintf(index_str,"%s/%s%s/INDEX.DAT",m_newspath.c_str(),m_reflector_type,tmp);	
+			file = fopen(index_str,"rb");
+			if (!file) {
+				LogMessage("Error getting index file: %s",index_str);
+				return 0U;
+			}
+			fseek(file,83U*(number-1),SEEK_SET);
+			n = fread(record,1,83U,file);
+			if (n<83U) {
+				fclose(file);
+				return 0U;
+			}
+			fclose(file);
+			// callsign
+			offset = 138U;
+			memcpy(data+offset,record+56U,10U);
+			offset+=10U;
+			// date
+			memcpy(data+offset,record+24U,12U);
+			offset+=12U;
+			// GPS
+			memcpy(data+offset,record,18U);
+			offset+=18U;
+			// Subject
+			memcpy(data+offset,record+66U,16U);
+
+			return 94U;
 		}			
 	} else {
 		data[0]='P';
 		
 		m_size=buffer.st_size;
 
-		::sprintf(index_str,"%s/%s/INDEX.DAT",m_newspath.c_str(),tmp);	
+		::sprintf(index_str,"%s/%s%s/INDEX.DAT",m_newspath.c_str(),m_reflector_type,tmp);	
 		file = fopen(index_str,"rb");
 		if (!file) {
 			LogMessage("Error getting index file: %s",index_str);
@@ -358,7 +413,10 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 		}
 		fseek(file,83U*(number-1),SEEK_SET);
 		n = fread(record,1,83U,file);
-		if (n<83U) return 0U;
+		if (n<83U) {
+				fclose(file);
+				return 0U;
+			}
 		fclose(file);
 		
 		m_seq=0;
@@ -395,17 +453,17 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 unsigned int CWiresXStorage::GetPictureHeader(unsigned char *data,unsigned int number, unsigned char *source) 
 {
 	FILE *file;
-	char index_str[80U];
+	char index_str[MAX_PATH_NAME];
 	char record[83U];  // records are 83 bytes long	
 	unsigned int n;
 	char tmp[6];
-	char cab[7]={0x50,0x00,0x00,0x30,0x00,0x00,0x00};
+	char cab[7]={0x50,0x00,0x01,0x30,0x00,0x00,0x00};
 
 	m_sum_check=0;
 	
 	::memcpy(tmp,source,5U);
 	tmp[5]=0;
-	::sprintf(index_str,"%s/%s/INDEX.DAT",m_newspath.c_str(),tmp);	
+	::sprintf(index_str,"%s/%s%s/INDEX.DAT",m_newspath.c_str(),m_reflector_type,tmp);	
 	file = fopen(index_str,"rb");
 	if (!file) {
 		LogMessage("Error getting index file: %s",index_str);
@@ -418,7 +476,7 @@ unsigned int CWiresXStorage::GetPictureHeader(unsigned char *data,unsigned int n
 	
 	// Copy GPS
 	::memcpy(data+5U,record,18U);
-	cab[2]=m_seq;
+	cab[2]=m_seq+1;
 	m_seq++;
 	::memcpy(data+23U,cab,7U);
 	data[30U]=(m_size>>8)&0xFF;
@@ -444,9 +502,9 @@ unsigned int CWiresXStorage::GetPictureHeader(unsigned char *data,unsigned int n
 unsigned int CWiresXStorage::GetPictureData(unsigned char *data,unsigned int offset) 
 {
 	unsigned int tam,n,i;
-	char tmp[5]={0x50,0x00,0x00,0x00,0x00};
+	char tmp[5]={0x50,0x00,0x01,0x00,0x00};
 
-	tmp[2]=m_seq;
+	tmp[2]=m_seq+1;
 	m_seq++;	
 	
 	if (offset>(m_size-1024U))  {
@@ -474,16 +532,20 @@ unsigned int CWiresXStorage::GetSumCheck(){
 	return m_sum_check;
 }
 
-std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const char *source, unsigned int gps)
+char tmp_gps[] = {0x53,0x37,0x51,0x52,0x58,0x50,0x7D,0x5B,0x70,0x6C,0x20,0x1C,0x5B,0x2F,0x20,0x20,0x20,0x20};
+
+std::string CWiresXStorage::StoreVoice(unsigned const char *data, const char *source, unsigned int news_channel, unsigned int gps)
 {
 	char destino[6];
-	char index_str[80];
+	char index_str[MAX_PATH_NAME];
 	char temp[13];
 	struct stat buffer;	
-	unsigned int number,off;
+	unsigned int number;
+//	unsigned int off;
 	struct tm tm;
 	time_t t;
 	int status;	
+	static std::string file_name;
 
 	number=1;
 	if (stat (m_newspath.c_str(), &buffer) != 0) {
@@ -497,23 +559,25 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const
 	if (m_reg_voice) delete m_reg_voice;
 	m_reg_voice = new wiresx_record;
 	
-	if (gps) {
-		::memcpy(m_reg_voice->gps_pos,data,18U);
-		off=18U;
-	}
-	else {
-		::memset(m_reg_voice->gps_pos,0,18U);
-		off=0;
-	}
+	// if (gps) {
+	// 	::memcpy(m_reg_voice->gps_pos,tmp_gps,18U);
+	// 	off=18U;
+	// }
+	// else {
+	// 	::memset(m_reg_voice->gps_pos,0,18U);
+	// 	off=0;
+	// }
 	
-	::memcpy(destino,data+off,5U);
-	destino[5]=0;	
-	::sprintf(index_str,"%s/%s",m_newspath.c_str(),destino);
+//	::memcpy(destino,data+off,5U);
+//	destino[5]=0;	
+	::memcpy(m_reg_voice->gps_pos,tmp_gps,18U);	
+	snprintf(destino,6U,"%05d",news_channel);
+	::sprintf(index_str,"%s/%s%s",m_newspath.c_str(),m_reflector_type,destino);
 	
 	if (stat (index_str, &buffer) != 0) {
 		status = mkdir(index_str, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (status != 0) { 
-			::LogMessage("Cannot create news directory for destination: %s.",destino);
+			::LogMessage("Cannot create news directory for destination: %s%s.",m_reflector_type,destino);
 			return std::string("");		
 		}
 	}
@@ -525,7 +589,7 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const
 	m_reg_voice->number=number;
 	t = time(NULL);
 	tm = *localtime(&t);
-	sprintf(temp,"%02hu%0hu%02hu%02hu%02hu%02hu", (tm.tm_year + 1900)%100, 
+	sprintf(temp,"%02hu%02hu%02hu%02hu%02hu%02hu", (tm.tm_year + 1900)%100, 
 		tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
 	::memcpy(m_reg_voice->time_recv,temp,13U);
@@ -536,8 +600,8 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, unsigned const
 	//::memcpy(reg->subject,data+58U,10U);	
 	//::memcpy(reg->text,data+off+45U,80U);	
 
-	::sprintf(index_str,"%s/%s/%05u.AMB",m_newspath.c_str(),destino,number);
-	std::string file_name(index_str);
+	::sprintf(index_str,"%s/%s%s/%05u.AMB",m_newspath.c_str(),m_reflector_type,destino,number);
+	file_name =std::string(index_str);
 	
 	return file_name;
 }

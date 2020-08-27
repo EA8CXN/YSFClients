@@ -35,9 +35,11 @@ public:
 	void putDMR(unsigned char* bytes);
 	void putDMRHeader();
 	void putDMREOT(bool do_fill);
+	void putDMRHeaderV1();
+	void putDMREOTV1(bool do_fill);	
 	void putDMRSilence(void);
 
-	void putYSF_Mode1(unsigned char* bytes, FILE *file);
+	void putYSF_Mode1(const unsigned char* bytes, FILE *file);
 	void putYSF_Mode2(unsigned char* bytes, FILE *file);	
 	void putYSF(unsigned char* bytes);
 	void putDummyYSF();
@@ -47,7 +49,8 @@ public:
 	unsigned int getYSF(unsigned char* bytes);
 	unsigned int getDMR(unsigned char* bytes);
 
-	void AMB2YSF(unsigned char * bytes);
+	void AMB2YSF_Mode2(unsigned char * bytes);
+	void AMB2YSF_Mode1(unsigned char * bytes);	
     void putVCH(unsigned char * buffer);
 	
 	void reset(void);

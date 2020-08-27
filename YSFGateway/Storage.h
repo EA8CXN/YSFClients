@@ -21,6 +21,8 @@
 #if !defined(STORAGE_H)
 #define	STORAGE_H
 
+#include "ModeConv.h"
+
 #include <string>
 
 
@@ -46,7 +48,7 @@ public:
 	unsigned int GetMessage(unsigned char *,unsigned int,unsigned char *);
 	void StoreTextMessage(const unsigned char*, const unsigned char*, unsigned int);
 	void StorePicture(const unsigned char*, const unsigned char*, unsigned int);	
-	std::string StoreVoice(unsigned const char*, unsigned const char*, unsigned int);
+	std::string StoreVoice(unsigned const char*, const char*, unsigned int news_channel, unsigned int);
 	void AddPictureData(const unsigned char *, unsigned int, unsigned char *);
 	unsigned int GetPictureHeader(unsigned char *,unsigned int, unsigned char *);
 	unsigned int GetPictureData(unsigned char *,unsigned int);
@@ -54,7 +56,7 @@ public:
 	unsigned int GetSumCheck();
 	void PictureEnd(bool);
     void VoiceEnd(unsigned int);
-
+	void UpdateReflectorType(unsigned int type);
 	
 private:
 	std::string 	m_callsign;
@@ -70,6 +72,7 @@ private:
 	std::string 	m_picture_name;
 	unsigned int    picture_final_size;
 	std::string		m_newspath;
+	char			m_reflector_type[4];
 	
 	void UpdateIndex(wiresx_record *);
 

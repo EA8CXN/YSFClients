@@ -28,11 +28,14 @@ const unsigned char MODE_CW      = 98U;
 const unsigned char MODE_LOCKOUT = 99U;
 const unsigned char MODE_ERROR   = 100U;
 
-const unsigned char TAG_HEADER = 0x00U;
-const unsigned char TAG_DATA   = 0x01U;
-const unsigned char TAG_LOST   = 0x02U;
-const unsigned char TAG_EOT    = 0x03U;
-const unsigned char TAG_NODATA = 0x04U;
+const unsigned char TAG_HEADER   = 0x00U;
+const unsigned char TAG_DATA     = 0x01U;
+const unsigned char TAG_LOST     = 0x02U;
+const unsigned char TAG_EOT      = 0x03U;
+const unsigned char TAG_NODATA   = 0x04U;
+const unsigned char TAG_HEADERV1 = 0x05U;
+const unsigned char TAG_DATAV1   = 0x06U;
+const unsigned char TAG_EOTV1    = 0x07U;
 
 enum HW_TYPE {
 	HWT_MMDVM,

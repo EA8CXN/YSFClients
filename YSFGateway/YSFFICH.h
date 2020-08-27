@@ -39,7 +39,6 @@ public:
 	unsigned char getDT() const;
 	unsigned char getMR() const;
 	bool getDev() const;
-	bool getSQL() const;
 	unsigned char getDGId() const;
 
 	void setFI(unsigned char fi);
@@ -53,7 +52,6 @@ public:
 	void setMR(unsigned char mr);
 	void setVoIP(bool set);
 	void setDev(bool set);
-	void setSQL(bool set);
 	void setDGId(unsigned char sq);
 
 	void load(const unsigned char* fich);

@@ -64,18 +64,27 @@ enum BE_STATUS {
 	BE_EOT
 };
 
+enum TG_STATUS {
+    TG_DISABLE,
+	TG_NONE,
+	WAITING_SEND_UNLINK,
+	WAITING_UNLINK,
+	SEND_REPLY,
+	SEND_PTT
+};
+
 class CStreamer {
 public:
 	CStreamer(CConf *conf);
 	~CStreamer();
 
-	void createGPS(std::string m_callsign);
+	void createGPS(std::string callsign);
     void setBeacon(std::string file, CTimer *inactivityTimer, CTimer *lost_timer, bool NoChange, unsigned int dgid);
     void AMBE_write(unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);
     void Init(CYSFNetwork *modemNetwork, CYSFNetwork* ysfNetwork, CFCSNetwork* fcsNetwork,CDMRNetwork *dmrNetwork,CReflectors*m_dmrReflectors);
-    void clock(unsigned int ms);
+    void clock(TG_STATUS m_TG_connect_state, unsigned int ms);
     bool not_busy(void);
-    bool change_TG(void);
+    WX_STATUS change_TG(void);
     std::string getNetDst(void);
     std::string get_ysfcallsign(void);
     void putNetDst(std::string);
@@ -137,6 +146,7 @@ private:
 	CRingBuffer<unsigned char> m_rpt_buffer;       
     enum TG_TYPE     m_tg_type;
     CTimer *         m_inactivityTimer;
+    CTimer *         m_inacBeaconTimer;
     CTimer *         m_lostTimer;
     CTimer           m_networkWatchdog;
 	unsigned int	 m_ysf_cnt;
@@ -147,17 +157,18 @@ private:
 	FLCO             m_dmrflco;
 	bool			 m_unlinkReceived;
     CReflectors*     m_dmrReflectors;      
-    bool             m_change_TG;
+    WX_STATUS        m_wx_returned;
     bool             m_NoChange;
     unsigned int     m_DGID;
+    std::string      m_callsign;
 
     void BeaconLogic(void);
     bool containsOnlyASCII(const std::string& filePath);
     void YSFPlayback(CYSFNetwork *rptNetwork);
     void GetFromNetwork(unsigned char *buffer, CYSFNetwork* rtpNetwork);
     char *get_radio(char c);
-    void GetFromModem(CYSFNetwork* rptNetwork);
-    void DMR_get_Modem(unsigned int ms);
+    void GetFromModem(CYSFNetwork* rptNetwork, TG_STATUS m_TG_connect_state);
+    void DMR_get_Network(CDMRData tx_dmrdata, unsigned int ms);
     void DMR_send_Network(void);
     std::string getSrcYSF_fromData(const unsigned char* buffer);
     std::string getSrcYSF_fromHeader(const unsigned char* buffer);

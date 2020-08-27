@@ -1,7 +1,7 @@
 /*
 *   Copyright (C) 2016-2019 by Jonathan Naylor G4KLX
 *   Copyright (C) 2018,2019 by Andy Uribe CA6JAU
-*   Copyright (C) 2019 by Manuel Sanchez EA7EE
+*   Copyright (C) 2019,2020 by Manuel Sanchez EA7EE
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -270,14 +270,16 @@ int CYSFGateway::run()
 	m_last_NXDN_TG = m_conf.getNXDNStartup();
 	m_last_P25_TG = m_conf.getP25Startup();
 	m_DGID = m_conf.getStartupDGID();
+	m_dmr_closed = false;
+	m_fcs_closed = false;	
+	m_ysf_closed = false;
 	
 	m_tg_type = (enum TG_TYPE) m_conf.getNetworkTypeStartup();
 	m_Streamer->put_tgType(m_tg_type);
 
 	LogInfo("General Parameters");
-	unsigned int m_original = atoi(m_startup.c_str());
-	if (atoi(m_startup.c_str()) == 0) LogInfo("    Startup TG: %s", m_startup.c_str());
-	else LogInfo("    Startup TG: %d", atoi(m_startup.c_str()));	
+	//unsigned int m_original = atoi(m_startup.c_str());
+	LogInfo("    Startup TG: %s", m_startup.c_str());
     LogInfo("    Startup Network Type: %s",	text_type[m_conf.getNetworkTypeStartup()]);
 	LogInfo("    Timeout TG Time: %d min", m_timeout_time);
     LogInfo("    TG List Reload Time: %d min", reloadTime);
@@ -345,7 +347,7 @@ int CYSFGateway::run()
 	}
 	
 	if (m_timeout_time>0) {
-		m_inactivityTimer = new CTimer(m_timeout_time * TIME_MIN);
+		m_inactivityTimer = new CTimer(1000U,m_timeout_time * 60U);
 	}
 	else m_inactivityTimer = NULL;
 	
@@ -454,26 +456,38 @@ int CYSFGateway::run()
 		// DMR connect logic
 		if (m_dmrNetworkEnabled) DMR_reconect_logic();
 		// Newtowrk data input/output
-		m_Streamer->clock(ms);	
+		m_Streamer->clock(m_TG_connect_state, ms);	
 		// Change TG
-		if (m_Streamer->change_TG()) {
+		WX_STATUS state = m_Streamer->change_TG();
+		if (state == WXS_CONNECT) {
 			//LogMessage("m_srcid: %d",m_srcid);
 			if (m_NoChange) {
 				LogMessage("Not allow to connect to other reflectors.");
-				m_wiresX->SendDReply();
+				//m_wiresX->SendDReply();
 			} else {	
 				unsigned int tmp_dstid = m_Streamer->get_dstid(); 
+				m_TG_connect_state = TG_NONE;
 				//unsigned int tmp_srcid = m_Streamer->get_srcid(); 	
 				//LogMessage("m_srcid: %d, m_dstid",tmp_srcid, tmp_dstid);	
 				int ret = TG_Connect(tmp_dstid);
 				if (ret) {
 					LogMessage("Connected to %05d - \"%s\" has been requested by %10.10s", tmp_dstid, m_Streamer->getNetDst().c_str(), m_Streamer->get_ysfcallsign().c_str());
-					if ((m_tg_type == YSF) || (m_tg_type == FCS)) m_wiresX->SendCReply();
-				} else {
-					LogMessage("Error with connect");
-					m_wiresX->SendDReply();
-				}	
+					if ((m_tg_type == YSF) || (m_tg_type == FCS))m_wiresX->SendCReply();
+				} 
+				// else {
+				// 	LogMessage("Error with connect");
+				// 	m_wiresX->SendDReply();
+				// }	
 			}				
+		} else if (state == WXS_DISCONNECT && (m_NoChange == false)) {
+			if (m_TG_connect_state == TG_DISABLE) {
+				m_TG_connect_state = TG_NONE;
+				m_wiresX->SendCReply();
+			}
+			else {
+				m_TG_connect_state = TG_DISABLE;
+				m_wiresX->SendDReply();
+			}
 		}
 		// Remote Processing
 		if (m_remoteSocket != NULL)
@@ -501,12 +515,12 @@ int CYSFGateway::run()
 		if (m_inactivityTimer!=NULL) {
 			m_inactivityTimer->clock(ms);
 			if (m_inactivityTimer->isRunning() && m_inactivityTimer->hasExpired()) {
-				if (m_Streamer->get_dstid() != m_original) {
-					LogWarning("Inactivity Timer Fired.");				
+				LogMessage("Inactivity Timer Fired.");				
+				if (m_original != m_current_num) {			
 					m_lostTimer.stop();
-					startupLinking();
+					startupReLinking();
 					m_lostTimer.start();
-				}
+				} else if (m_tg_type == YSF) m_Streamer->SendDummyYSF(m_ysfNetwork, m_DGID);
 				m_inactivityTimer->start();
 			} 
 		}
@@ -613,6 +627,46 @@ bool is_number(const std::string& s)
     return !s.empty() && it == s.end();
 }
 
+
+void CYSFGateway::startupReLinking()
+{
+	int tmp_id = m_conf.getNetworkTypeStartup();
+	if (m_tg_type != tmp_id) {
+		switch (tmp_id)
+		{
+		case YSF:
+			TG_Connect(2);
+			if (m_original != m_last_YSF_TG) 
+				TG_Connect(m_original);
+			break;
+		case FCS:
+			TG_Connect(3);
+			if (m_original != m_last_FCS_TG)
+				TG_Connect(m_original);
+			break;
+		case DMR:
+			TG_Connect(4);
+			if (m_original != m_last_DMR_TG)
+				TG_Connect(m_original);
+			break;
+		case P25:
+			TG_Connect(5);
+			if (m_original != m_last_P25_TG)
+				TG_Connect(m_original);			
+			break;
+		case NXDN:
+			TG_Connect(6);
+			if (m_original != m_last_NXDN_TG)
+				TG_Connect(m_original);				
+			break;
+		default:
+			break;
+		}
+	} else
+		TG_Connect(m_original);
+	m_wiresX->SendCReply();
+}
+
 bool CYSFGateway::startupLinking()
 {
 	int tmp_id = m_conf.getNetworkTypeStartup();	
@@ -670,8 +724,7 @@ bool CYSFGateway::startupLinking()
 				m_current = reflector->m_name;
 				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
 				LogMessage("DMR Reflector: %s",m_current.c_str());
-			}
-			if (m_inactivityTimer!=NULL) m_inactivityTimer->start();			
+			}			
 			m_last_DMR_TG = m_Streamer->get_dstid(); 
 			m_dmrNetwork->enable(true);
 			return true;
@@ -684,6 +737,8 @@ bool CYSFGateway::startupLinking()
 			LogMessage("Antes de llamar a TGCOnnect en startup");	
 			if (TG_Connect(atoi(reflector->m_id.c_str()))) {
 				LogMessage("Automatic (re-)connection to %5.5s - \"%s\"", reflector->m_id.c_str(), reflector->m_name.c_str());
+				m_original = atoi(reflector->m_id.c_str());
+				m_current_num = m_original;
 				return true;
 			}
 			else LogMessage("Not Possible connection - %d", atoi(reflector->m_id.c_str()));	
@@ -697,6 +752,14 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 	std::string dst_str_ID = std::to_string(dstID);
     TG_TYPE last_type=m_tg_type;
 	int tglistOpt;
+
+	if (m_tg_type == DMR && m_dmr_closed) {
+		m_dmr_closed = false;
+	} else if (m_tg_type == FCS && m_fcs_closed) {
+		m_fcs_closed = false;			
+	} else if (m_tg_type == YSF && m_ysf_closed) {
+		m_ysf_closed = false;
+	}	
 	
 	if (dstID < 6) {
 		dstID--;
@@ -752,7 +815,6 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			m_tg_type=P25;
 			m_Streamer->put_tgType(m_tg_type);
 		}
-		
 	}
 
 	// Don´t try to reconnect to mode
@@ -766,15 +828,13 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 		    if (dstID==1) {
 				reflector = m_ysfReflectors->findById(dst_str_ID);
 				LogMessage("Trying PARROT");					
-				if (m_inactivityTimer!=NULL) m_inactivityTimer->stop();
 				m_lostTimer.stop();
 
 				m_current = "PARROT";
+				m_current_num = 1;
 				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');				
 				m_ysfNetwork->setDestination(m_current, m_parrotAddress, m_parrotPort);
 				m_ysfNetwork->writePoll(3U);
-
-				if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
 				m_lostTimer.start();					
 				m_tg_type = YSF;
 				m_Streamer->put_tgType(m_tg_type);						
@@ -783,7 +843,6 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_wiresX->setReflectors(m_ysfReflectors);					
 				m_wiresX->setReflector(reflector, m_Streamer->get_dstid());			
 			} else if (m_ysfNetwork != NULL) {
-				if (m_inactivityTimer!=NULL) m_inactivityTimer->stop();
 				m_lostTimer.stop();
 
 				reflector = m_ysfReflectors->findById(dst_str_ID);
@@ -794,18 +853,18 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 
 						m_ysfNetwork->setDestination(reflector->m_name, reflector->m_address, reflector->m_port);
 						m_ysfNetwork->writePoll(3U);
+						m_current_num = atoi(reflector->m_id.c_str());
 					}
 
 					m_current = reflector->m_name;
 					m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
-					if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
 					m_lostTimer.start();					
 					m_tg_type = YSF;
 					m_Streamer->put_tgType(m_tg_type);						
 
 					m_Streamer->put_dstid(dstID);
 					m_wiresX->setReflectors(m_ysfReflectors);					
-					m_wiresX->setReflector(reflector, m_Streamer->get_dstid());
+					m_wiresX->setReflector(reflector, dstID);
 					m_last_YSF_TG = dstID;
 					m_Streamer->SendDummyYSF(m_ysfNetwork, m_DGID);
 					} else return false;
@@ -814,7 +873,6 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			break;
 		case FCS:		
 			if (m_fcsNetwork != NULL) {
-				if (m_inactivityTimer!=NULL) m_inactivityTimer->stop();
 				m_lostTimer.stop();				
 
 				reflector = m_fcsReflectors->findById(dst_str_ID);
@@ -826,7 +884,6 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 
 						m_current = reflector->m_name;
 						m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
-						if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
 						m_lostTimer.start();
 						m_tg_type = FCS;
 						m_Streamer->put_tgType(m_tg_type);						
@@ -834,7 +891,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 						m_Streamer->put_dstid(dstID);
 						m_last_FCS_TG = dstID;						
 						m_wiresX->setReflectors(m_fcsReflectors);
-						m_wiresX->setReflector(reflector, m_Streamer->get_dstid());
+						m_wiresX->setReflector(reflector, dstID);
+						m_current_num = atoi(reflector->m_id.c_str());
 						m_last_FCS_TG = dstID;
 					} else return false;							
 				} else return false;					
@@ -898,14 +956,22 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				} else 
 					m_TG_connect_state = SEND_REPLY;
 				m_TGChange.start();	
-			}			
-			if (reflector == NULL) m_current = std::string("TG") + std::to_string(m_Streamer->get_dstid());
-			else m_current = reflector->m_name;
+			} else {
+				m_TG_connect_state = SEND_REPLY;
+				m_TGChange.start();					
+			}
+
+			if (reflector == NULL) {
+				m_current = std::string("TG") + std::to_string(dstID);
+				m_current_num = dstID;
+			} else {
+				m_current = reflector->m_name;
+				m_current_num = atoi(reflector->m_id.c_str());
+			}
 			m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
-			if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
 			m_tg_type = DMR;
 			m_Streamer->put_tgType(m_tg_type);				
-			m_wiresX->setReflector(reflector, m_Streamer->get_dstid());			
+			m_wiresX->setReflector(reflector, dstID);			
 			m_wiresX->setReflectors(m_dmrReflectors);
 			if (dstID == m_last_DMR_TG && !first_time_DMR) {
 				m_wiresX->SendCReply();
@@ -920,7 +986,6 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 
 				m_current.assign(reflector->m_name);
 				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
-				if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
 				m_lostTimer.start();
 				m_tg_type = NXDN;
 				m_Streamer->put_tgType(m_tg_type);				
@@ -929,6 +994,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_wiresX->setReflector(reflector, m_Streamer->get_dstid());
 				m_wiresX->setReflectors(m_nxdnReflectors);				
 				m_wiresX->SendRConnect(m_ysfNetwork);
+				m_current_num = atoi(reflector->m_id.c_str());
 				m_last_NXDN_TG = dstID;
 			} else return false;
 			break;
@@ -939,7 +1005,6 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 
 				m_current.assign(reflector->m_name);
 				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
-				if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
 				m_lostTimer.start();
 				m_tg_type = P25;
 				m_Streamer->put_tgType(m_tg_type);				
@@ -948,6 +1013,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_wiresX->setReflector(reflector, m_Streamer->get_dstid());
 				m_wiresX->setReflectors(m_p25Reflectors);				
 				m_wiresX->SendRConnect(m_ysfNetwork);
+				m_current_num = atoi(reflector->m_id.c_str());
 				m_last_P25_TG = dstID;
 			} else return false;
 			break;
@@ -1279,7 +1345,7 @@ unsigned int tmp_srcid;
 					}
 					break;
 				case SEND_REPLY:
-					if (m_TGChange.elapsed() > 600) {
+					if (m_TGChange.elapsed() > 100) {
 						m_TGChange.start();
 						m_TG_connect_state = SEND_PTT;				
 						m_wiresX->SendCReply();
@@ -1288,7 +1354,7 @@ unsigned int tmp_srcid;
 					break;
 				case SEND_PTT:
 				//	if (m_TGChange.elapsed() > 200) {				
-					if (m_Streamer->not_busy() && !m_wiresX->isBusy() && (m_TGChange.elapsed() > 900)) {
+					if (m_Streamer->not_busy() && !m_wiresX->isBusy() && (m_TGChange.elapsed() > 100U)) {
 						m_TGChange.start();
 						m_lostTimer.start();
 						m_TG_connect_state = TG_NONE;
@@ -1305,10 +1371,10 @@ unsigned int tmp_srcid;
 					break;
 			}
 
-			if ((m_TG_connect_state != TG_NONE) && (m_TGChange.elapsed() > 12000)) {
+			if ((m_TG_connect_state != TG_NONE) && (m_TG_connect_state != TG_DISABLE) && (m_TGChange.elapsed() > 12000U)) {
 				LogMessage("Timeout changing TG");
 				m_TG_connect_state = TG_NONE;
-				m_wiresX->SendDReply();				
+				m_wiresX->SendCReply();				
 				//m_not_busy=true;
 				m_lostTimer.start();
 				if (m_ptt_dstid) {
@@ -1354,7 +1420,7 @@ void CYSFGateway::processRemoteCommands()
 					if ((m_tg_type == YSF) || (m_tg_type == FCS)) m_wiresX->SendCReply();
 				} else {
 					LogMessage("Remote Error with YSF connect");
-					m_wiresX->SendDReply();
+					//m_wiresX->SendDReply();
 				}
 			// }
 		} else if (::memcmp(buffer + 0U, "LinkFCS", 7U) == 0) {
@@ -1381,7 +1447,7 @@ void CYSFGateway::processRemoteCommands()
 					m_wiresX->SendCReply();
 				} else {
 					LogMessage("Remote Error with FCS connect");
-					m_wiresX->SendDReply();
+					//m_wiresX->SendDReply();
 				}
 			// }		
 		} else {

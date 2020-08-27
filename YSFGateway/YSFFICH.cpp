@@ -210,11 +210,6 @@ bool CYSFFICH::getDev() const
 	return (m_fich[2U] & 0x40U) == 0x40U;
 }
 
-bool CYSFFICH::getSQL() const
-{
-	return (m_fich[3U] & 0x80U) == 0x80U;
-}
-
 unsigned char CYSFFICH::getDGId() const
 {
 	return m_fich[3U] & 0x7FU;
@@ -276,14 +271,6 @@ void CYSFFICH::setDT(unsigned char dt)
 {
 	m_fich[2U] &= 0xFCU;
 	m_fich[2U] |= dt & 0x03U;
-}
-
-void CYSFFICH::setSQL(bool on)
-{
-	if (on)
-		m_fich[3U] |= 0x80U;
-	else
-		m_fich[3U] &= 0x7FU;
 }
 
 void CYSFFICH::setDGId(unsigned char sq)

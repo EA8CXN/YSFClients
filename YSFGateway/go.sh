@@ -1,5 +1,6 @@
 sudo mount -o remount,rw /
 sudo rm /var/log/pi-star/YSFG*
+#sudo rm -r /tmp/news
 dos2unix /home/pi-star/*cpp
 dos2unix /home/pi-star/*.h
 cp /home/pi-star/*.cpp .
@@ -13,5 +14,6 @@ sudo systemctl stop ysfgateway
 sudo cp ./YSFGateway /usr/local/bin
 sudo systemctl start ysfgateway
 sleep 4
-cat /var/log/pi-star/YSFG*
+tail -f  /var/log/pi-star/YSFGateway*
+
 

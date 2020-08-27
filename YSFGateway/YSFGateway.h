@@ -34,14 +34,6 @@
 
 #include <string>
 
-enum TG_STATUS {
-	TG_NONE,
-	WAITING_SEND_UNLINK,
-	WAITING_UNLINK,
-	SEND_REPLY,
-	SEND_PTT
-};
-
 class CYSFGateway
 {
 public:
@@ -61,7 +53,7 @@ private:
 	CReflectors*	m_actual_ref;
 	CWiresX*        m_wiresX;
 	bool			m_ptt_pc;
-	unsigned int     m_ptt_dstid;
+	unsigned int    m_ptt_dstid;
 	CYSFNetwork*    m_ysfNetwork;
 	CFCSNetwork*    m_fcsNetwork;
 	CDMRNetwork*    m_dmrNetwork;	
@@ -98,8 +90,14 @@ private:
 	CUDPSocket*      m_remoteSocket;
 	CStreamer*		 m_Streamer;
 	unsigned int	 m_DGID;
+	bool			 m_dmr_closed;
+	bool			 m_fcs_closed;	
+	bool			 m_ysf_closed;
+	unsigned int 	 m_original;
+	unsigned int     m_current_num;
 
 	bool startupLinking();
+	void startupReLinking();
 	std::string calculateLocator();
 	void createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::string callsign);
 	bool TG_Connect(unsigned int dstID);

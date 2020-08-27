@@ -28,6 +28,7 @@ public:
 
 	bool processHeaderData(unsigned char* bytes);
 
+	void writeVDMode1Data(unsigned char* data, const unsigned char* dt);
 	void writeVDMode2Data(unsigned char* data, const unsigned char* dt);
 	bool readVDMode1Data(const unsigned char* data, unsigned char* dt);
 	bool readVDMode2Data(const unsigned char* data, unsigned char* dt);

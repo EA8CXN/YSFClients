@@ -466,6 +466,7 @@ const unsigned char WHITENING_DATA[] = {0x93U, 0xD7U, 0x51U, 0x21U, 0x9CU, 0x2FU
 
 const unsigned char DMR_SILENCE[] = {0xB9U, 0xE8U, 0x81U, 0x52U, 0x61U, 0x73U, 0x00U, 0x2AU, 0x6BU};
 const unsigned char YSF_SILENCE[] = {0x7BU, 0xB2U, 0x8EU, 0x43U, 0x36U, 0xE4U, 0xA2U, 0x39U, 0x78U, 0x49U, 0x33U, 0x68U, 0x33U};
+const unsigned char YSF_SILENCEV1[] = {0x7BU, 0xB2U, 0x8EU, 0x43U, 0x36U, 0xE4U, 0xA2U, 0x39U, 0x78U, 0x49U, 0x33U, 0x68U, 0x33U};
 
 CModeConv::CModeConv() :
 m_ysfN(0U),
@@ -539,7 +540,7 @@ void CModeConv::putDMR(unsigned char* bytes)
 	putAMBE2YSF(a3, b3, c3);
 }
 
-void CModeConv::AMB2YSF(unsigned char * bytes){
+void CModeConv::AMB2YSF_Mode2(unsigned char * bytes){
 
 	unsigned char vch[13U];
 	unsigned char ysfFrame[13U];
@@ -601,6 +602,59 @@ void CModeConv::AMB2YSF(unsigned char * bytes){
 	m_YSF.addData(&TAG_DATA, 1U);
 	m_YSF.addData(ysfFrame, 13U);
 	//CUtils::dump(1U, "VCH V/D type 2:", ysfFrame, 13U);
+
+	m_ysfN += 1U;
+}
+
+void CModeConv::AMB2YSF_Mode1(unsigned char * bytes){
+
+	unsigned char vch[9U];
+//	unsigned char ysfFrame[9U];
+	::memset(vch, 0U, 9U);
+//	::memset(ysfFrame, 0, 9U);
+	unsigned int dat_a,dat_b,dat_c,tmp,tmp1;
+	unsigned int a,b;
+
+	dat_a=((((unsigned int)bytes[1])<<4)|(((unsigned int)bytes[2]>>4)&0x0F));
+	dat_b=((((unsigned int)(bytes[2]&0x0F))<<8)|((unsigned int)bytes[3]));
+	tmp=bytes[4];
+	tmp=tmp<<17;
+	tmp1=bytes[5];
+	tmp1=tmp1<<9;
+	tmp=tmp|tmp1;
+	tmp1=bytes[6];
+	tmp1=tmp1<<1;
+	tmp=tmp|tmp1;
+    dat_c=tmp|(bytes[7]&0x01);
+
+	a = CGolay24128::encode24128(dat_a);
+
+	b = CGolay24128::encode23127(dat_b) >> 1;
+
+	unsigned int p = PRNG_TABLE[dat_a] >> 1;
+	b ^= p;
+
+	unsigned int MASK = 0x800000U;
+	for (unsigned int i = 0U; i < 24U; i++, MASK >>= 1) {
+		unsigned int aPos = DMR_A_TABLE[i];
+		WRITE_BIT(vch, aPos, a & MASK);
+	}
+
+	MASK = 0x400000U;
+	for (unsigned int i = 0U; i < 23U; i++, MASK >>= 1) {
+		unsigned int bPos = DMR_B_TABLE[i];
+		WRITE_BIT(vch, bPos, b & MASK);
+	}
+
+	MASK = 0x1000000U;
+	for (unsigned int i = 0U; i < 25U; i++, MASK >>= 1) {
+		unsigned int cPos = DMR_C_TABLE[i];
+		WRITE_BIT(vch, cPos, dat_c & MASK);
+	}
+
+	m_YSF.addData(&TAG_DATAV1, 1U);
+	m_YSF.addData(vch, 9U);
+	//CUtils::dump(1U, "VCH V/D type 1:", vch, 9U);
 
 	m_ysfN += 1U;
 }
@@ -695,7 +749,7 @@ void CModeConv::putAMBE2YSF(unsigned int a, unsigned int b, unsigned int dat_c)
 	m_ysfN += 1U;
 }
 
-void CModeConv::putYSF_Mode1(unsigned char* data, FILE *file) {
+void CModeConv::putYSF_Mode1(const unsigned char* data, FILE *file) {
 	assert(data != NULL);
 
 	data += YSF_SYNC_LENGTH_BYTES + YSF_FICH_LENGTH_BYTES;
@@ -958,6 +1012,17 @@ void CModeConv::putDMRHeader()
 	m_ysfN += 1U;
 }
 
+void CModeConv::putDMRHeaderV1()
+{
+	unsigned char vch[9U];
+
+	::memset(vch, 0, 9U);
+
+	m_YSF.addData(&TAG_HEADERV1, 1U);
+	m_YSF.addData(vch, 9U);
+	m_ysfN += 1U;
+}
+
 void CModeConv::putDMRSilence(void) {
 	for (unsigned int i = 0U; i < 5U; i++) {
 		m_YSF.addData(&TAG_DATA, 1U);
@@ -982,6 +1047,25 @@ void CModeConv::putDMREOT(bool do_fill)
 	}
 	m_YSF.addData(&TAG_EOT, 1U);
 	m_YSF.addData(vch, 13U);
+	m_ysfN += 1U;
+}
+
+void CModeConv::putDMREOTV1(bool do_fill)
+{
+	unsigned char vch[9U];
+
+	::memset(vch, 0, 9U);
+	
+	if (do_fill) {
+		unsigned int fill = 5U - (m_ysfN % 5U);
+		for (unsigned int i = 0U; i < fill; i++) {
+			m_YSF.addData(&TAG_DATAV1, 1U);
+			m_YSF.addData(DMR_SILENCE, 9U);
+			m_ysfN += 1U;
+		}
+	}
+	m_YSF.addData(&TAG_EOTV1, 1U);
+	m_YSF.addData(vch, 9U);
 	m_ysfN += 1U;
 }
 
@@ -1068,7 +1152,7 @@ unsigned int CModeConv::getYSF(unsigned char* data)
 	if (m_ysfN >= 1U) {
 		m_YSF.peek(tag, 1U);
 
-		if (tag[0U] != TAG_DATA) {
+		if ((tag[0U] != TAG_DATA) && (tag[0U] != TAG_DATAV1)) {
 			m_YSF.getData(tag, 1U);
 			m_YSF.getData(data, 13U);
 			m_ysfN -= 1U;
@@ -1077,32 +1161,59 @@ unsigned int CModeConv::getYSF(unsigned char* data)
 	}
 
 	if (m_ysfN >= 5U) {
-		data += 5U;
-		m_YSF.getData(tag, 1U);
-		m_YSF.getData(data, 13U);
-		m_ysfN -= 1U;
+		if (tag[0U] == TAG_DATA) {
+			data += 5U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 13U);
+			m_ysfN -= 1U;
 
-		data += 18U;
-		m_YSF.getData(tag, 1U);
-		m_YSF.getData(data, 13U);
-		m_ysfN -= 1U;
+			data += 18U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 13U);
+			m_ysfN -= 1U;
 
-		data += 18U;
-		m_YSF.getData(tag, 1U);
-		m_YSF.getData(data, 13U);
-		m_ysfN -= 1U;
+			data += 18U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 13U);
+			m_ysfN -= 1U;
 
-		data += 18U;
-		m_YSF.getData(tag, 1U);
-		m_YSF.getData(data, 13U);
-		m_ysfN -= 1U;
+			data += 18U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 13U);
+			m_ysfN -= 1U;
 
-		data += 18U;
-		m_YSF.getData(tag, 1U);
-		m_YSF.getData(data, 13U);
-		m_ysfN -= 1U;
+			data += 18U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 13U);
+			m_ysfN -= 1U;
+			return TAG_DATA;
+		} else {
+			data += 9U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 9U);
+			m_ysfN -= 1U;
 
-		return TAG_DATA;
+			data += 18U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 9U);
+			m_ysfN -= 1U;
+
+			data += 18U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 9U);
+			m_ysfN -= 1U;
+
+			data += 18U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 9U);
+			m_ysfN -= 1U;
+
+			data += 18U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 9U);
+			m_ysfN -= 1U;	
+			return TAG_DATAV1;		
+		}
 	}
 	else
 		return TAG_NODATA;

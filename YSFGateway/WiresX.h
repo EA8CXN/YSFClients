@@ -62,7 +62,9 @@ enum WXSI_STATUS {
 	WXSI_UPLOAD_PIC,
 	WXSI_UPLOAD_TXT,
 	WXSI_SEND_RCONNECT,
-	WXSI_SEND_PREPLY
+	WXSI_SEND_PREPLY,
+	WXSI_SEND_VREPLY,
+	WXSI_PLAY_AMBE
 };
 
 enum WXPIC_STATUS {
@@ -74,11 +76,11 @@ enum WXPIC_STATUS {
 
 class CWiresX {
 public:
-	CWiresX(CWiresXStorage* storage, const std::string& callsign, std::string& location, CYSFNetwork* network, bool makeUpper);
+	CWiresX(CWiresXStorage* storage, const std::string& callsign, std::string& location, CYSFNetwork* network, bool makeUpper, CModeConv *mconv);
 	~CWiresX();
 	
 	WX_STATUS process(const unsigned char* data, const unsigned char* source, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);	
-
+	WX_STATUS processVDMODE1(std::string& callsign, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);	
 	unsigned int getDstID();
 	unsigned int getTgCount();
 	unsigned int getOpt(unsigned int id);
@@ -96,6 +98,7 @@ public:
 	void SendPReply(CYSFNetwork* ysfNetwork);
 	void SendRConnect(CYSFNetwork* ysfNetwork);
 	bool sendNetwork(void);
+	void getMode1DCH(unsigned char *dch,unsigned int fn);
 	
 	//void processConnect(CReflector* reflector);
 	void processDisconnect(const unsigned char* source = NULL);
@@ -153,6 +156,10 @@ private:
 	CYSFNetwork*    m_ysfNetwork;
 	bool 			m_no_store_picture;
 	bool 		    m_sendNetwork;
+	unsigned int 	m_last_news;
+	FILE *	        m_ambefile;
+	CStopWatch       m_ysfWatch;
+	CModeConv *     m_conv;
 
 	WX_STATUS processConnect(const unsigned char* source, const unsigned char* data);
 	void processDX(const unsigned char* source);
@@ -160,12 +167,13 @@ private:
 	
 	void processCategory(const unsigned char* source, const unsigned char* data);
 	void processListDown(const unsigned char* source, const unsigned char* data);
-	void processGetMessage(const unsigned char* source, const unsigned char* data);
+	WX_STATUS processGetMessage(const unsigned char* source, const unsigned char* data);
 	WX_STATUS processUploadMessage(const unsigned char* source, const unsigned char* data, unsigned int gps);
 	WX_STATUS processUploadPicture(const unsigned char* source, const unsigned char* data, unsigned int gps);
 	void processPictureACK(const unsigned char* source, const unsigned char* data);
 	void processDataPicture(const unsigned char* data, unsigned int size);
-	void processNews(const unsigned char* source, const unsigned char* data);	
+	void processNews(const unsigned char* source, const unsigned char* data);
+	void processVoiceACK();
 	void sendDXReply();
 	void sendAllReply();
 	void sendLocalNewsReply();
@@ -181,6 +189,7 @@ private:
 	void sendPictureEnd();
 	void sendConnectReply();
 	void sendDisconnectReply();	
+	void sendAMBEMode1();
 
 	void createReply(const unsigned char* data, unsigned int length, const char* dst_callsign);
 	void writeData(const unsigned char* data);

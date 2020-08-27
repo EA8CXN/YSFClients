@@ -25,6 +25,7 @@
 #include "Sync.h"
 #include "CRC.h"
 #include "Log.h"
+#include "ModeConv.h"
 
 #include <algorithm>
 #include <functional>
@@ -66,6 +67,7 @@ const unsigned char MESSAGE_REC[]  = {0x47U, 0x65U, 0x5FU};
 
 const unsigned char MESSAGE_SEND[]  = {0x47U, 0x66U, 0x5FU, 0x26U};
 
+const unsigned char VOICE_RESP[]  = {0x5DU, 0x56U, 0x5FU, 0x25U};
 const unsigned char VOICE_ACK[]  = {0x5DU, 0x30U, 0x5FU, 0x26U};
 
 const unsigned char PICT_REC_GPS[]  = {0x47U, 0x68U, 0x5FU};
@@ -77,7 +79,6 @@ const unsigned char PICT_BEGIN2[]  = {0x4EU, 0x64U, 0x5FU};
 
 const unsigned char PICT_END[]  = {0x4EU, 0x65U, 0x5FU};
 
-
 const unsigned char PICT_DATA_RESP[]  = {0x4EU, 0x62U, 0x5FU, 0x26U};
 const unsigned char PICT_BEGIN_RESP[]  = {0x4EU, 0x63U, 0x5FU, 0x26U};
 const unsigned char PICT_BEGIN_RESP_GPS[]  = {0x4EU, 0x64U, 0x5FU, 0x26U};
@@ -87,9 +88,9 @@ const unsigned char PICT_PREAMB_RESP[]  = {0x5DU, 0x50U, 0x5FU, 0x26U};
 
 const unsigned char UP_ACK[] = {0x47U, 0x30U, 0x5FU, 0x26U};
 
+const unsigned char voice_mark[] = {0x5A,0x4C,0x5A,0x5A,0x5A,0x4C,0x76,0x58,0x1C,0x6C,0x20,0x1C,0x30,0x57};
 
-
-CWiresX::CWiresX(CWiresXStorage* storage, const std::string& callsign, std::string& location, CYSFNetwork* network, bool makeUpper) :
+CWiresX::CWiresX(CWiresXStorage* storage, const std::string& callsign, std::string& location, CYSFNetwork* network, bool makeUpper, CModeConv *mconv) :
 //CThread(),
 m_storage(storage),
 m_callsign(callsign),
@@ -108,7 +109,7 @@ m_rxFrequency(0U),
 m_dstID(0),
 //m_fulldstID(0),
 m_count(0),
-m_timer(2000U, 1U),
+m_timer(1000U, 1U),
 m_ptimer(1000U, 1U),
 m_timeout(1000U, 10U),
 m_seqNo(0U),
@@ -125,7 +126,7 @@ m_category(),
 m_makeUpper(makeUpper),
 //m_search(),
 m_busy(false),
-m_busyTimer(3000U, 1U),
+m_busyTimer(1000U, 1U),
 m_txWatch(),
 //m_bufferTX(10000U, "YSF Wires-X TX Buffer"),
 m_type(0U),
@@ -157,6 +158,9 @@ error_upload(false)
 	
 	m_picture_state = WXPIC_NONE;
 	m_end_picture=true;
+	m_last_news = 0;
+	m_ambefile = NULL;
+	m_conv = mconv;
 	
 	m_txWatch.start();
 }
@@ -233,6 +237,47 @@ bool CWiresX::start()
 	return true;
 } 
 
+WX_STATUS CWiresX::processVDMODE1(std::string& callsign, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt){
+static FILE *fileambe;
+static unsigned int size;
+static std::string filename;
+
+	if (m_last_news == 0) m_last_news =  17707U; //return WXS_FAIL;
+
+	if (fi == YSF_FI_HEADER) {
+		// open file
+		//m_source = callsign;		
+		filename = m_storage->StoreVoice(data,m_source.c_str(),m_last_news,false);
+		fileambe = fopen(filename.c_str(),"wb");
+		size=0;
+		if (!fileambe) {
+			LogMessage("Error writing fileambe.");
+			return WXS_FAIL;
+		} else LogMessage("Writing AMBE file: %s", filename.c_str());
+	} else if (fi == YSF_FI_COMMUNICATIONS) {
+		// convert and write file
+		if (fileambe) m_conv->putYSF_Mode1(data + 35U,fileambe);
+		size+=40;
+	} else if (fi == YSF_FI_TERMINATOR) {
+		// close file
+		m_storage->VoiceEnd(size);
+		if (fileambe) fclose(fileambe);
+		processVoiceACK();
+
+		// // Play message mode 1
+		// LogMessage("Playing Voice Message file: %s",filename.c_str());
+		// m_ambefile = fopen(filename.c_str(),"rb");
+		// if (m_ambefile) {
+		// 	LogMessage("File open successfully.");
+		// 	m_status = WXSI_PLAY_AMBE;
+		// 	return WXS_PLAY;
+		// }
+
+	}
+	return WXS_NONE;
+}
+
+
 WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* source, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt)
 {
 	unsigned char prueba[20];
@@ -297,16 +342,21 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 				LogMessage("Error Data Packet receiving picture");
 				error_upload= true;
 			}
-			//CUtils::dump("Not Valid block", m_command, cmd_len);
-			LogMessage("Not Valid block");		
+			CUtils::dump("Not Valid block", m_command, cmd_len);
+			//LogMessage("Not Valid block");		
 			return WXS_NONE;
 		}
 
 		char tmp[11];
 		::memcpy(tmp,(const char *)source,10U);
 		tmp[10]=0;
+		LogMessage("Source = %s",tmp);
 		m_source = tmp;
 		m_sendNetwork = true;
+
+		// CUtils::dump(" Wires-X command", m_command, cmd_len);
+		// m_sendNetwork = false;
+		// return WXS_NONE;
 		
 		if (::memcmp(m_command + 1U, DX_REQ, 3U) == 0) {
 			m_sendNetwork = false;
@@ -342,8 +392,8 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 			m_sendNetwork = false;
 			//CUtils::dump("Get Message command", m_command, cmd_len);
 			LogMessage("Get Message command");
-			processGetMessage(source, m_command + 5U);
-			return WXS_GET_MESSAGE;
+			return processGetMessage(source, m_command + 5U);
+			//return WXS_GET_MESSAGE;
 		} else if (::memcmp(m_command + 1U, MESSAGE_REC, 3U) == 0) {
 			//CUtils::dump("Message Uploading", m_command, cmd_len);
 			LogMessage("Message Uploading");
@@ -435,6 +485,8 @@ void CWiresX::setReflector(CReflector* reflector, int dstID)
 {
 	m_reflector = reflector;
 	m_dstID = dstID;
+	if (reflector) m_storage->UpdateReflectorType(reflector->m_type);
+	else m_storage->UpdateReflectorType(DMR);
 }
 
 void CWiresX::processDX(const unsigned char* source)
@@ -536,7 +588,7 @@ void CWiresX::processNews(const unsigned char* source, const unsigned char* data
 	char tmp[6];
 	::memcpy(tmp,m_news_source,5U);
 	tmp[5]=0;
-
+	m_last_news = atoi(tmp);
 	::LogMessage("Received NEWS for \"%5.5s\" from %10.10s",tmp, source);
 
 	m_status = WXSI_NEWS;
@@ -570,21 +622,32 @@ void CWiresX::processListDown(const unsigned char* source, const unsigned char* 
 	m_timer.start();
 }
 
-void CWiresX::processGetMessage(const unsigned char* source, const unsigned char* data)
+unsigned char voice_data[200U];
+
+WX_STATUS CWiresX::processGetMessage(const unsigned char* source, const unsigned char* data)
 {
 	m_busy = true;
 	m_busyTimer.start();
-	
 	char tmp[6];
+
+	::memcpy(m_news_source,((const char *)data) + 0U,5U);
 	::memcpy(tmp,(const char *)(data+14U),5U);
 	tmp[5]=0;
 	m_number = atoi(tmp);
+
+
 
 	::LogMessage("Received Get Message number %05u from %10.10s", m_number, source);
 
 	m_status = WXSI_GET_MESSAGE;
 	m_end_picture=false;
 	m_timer.start();
+
+	m_storage->GetMessage(voice_data,m_number,m_news_source);
+	if (voice_data[0] == 'V') {
+		return WXS_PLAY;
+	}
+	else return WXS_NONE;
 }
 
 WX_STATUS CWiresX::processUploadPicture(const unsigned char* source, const unsigned char* data, unsigned int gps)
@@ -643,6 +706,18 @@ void CWiresX::processPictureACK(const unsigned char* source, const unsigned char
 	m_timeout.stop();
 }
 
+void CWiresX::processVoiceACK()
+{
+	m_busy = true;
+	m_busyTimer.start();
+	
+	m_status = WXSI_SEND_VREPLY;
+	m_timeout.start();
+	m_timer.start();
+	m_timeout.stop();
+}
+
+
 WX_STATUS CWiresX::processUploadMessage(const unsigned char* source, const unsigned char* data, unsigned int gps)
 {
 	char tmp1[6];
@@ -693,15 +768,15 @@ WX_STATUS CWiresX::processConnect(const unsigned char* source, const unsigned ch
 }
 
 void CWiresX::SendCReply(void) {
-	m_busy = true;
-	m_busyTimer.start();
+	//m_busy = true;
+	//m_busyTimer.start();
 	m_status = WXSI_CONNECT;
 	m_timer.start();
 }
 
 void CWiresX::SendDReply(void) {
-	m_busy = true;
-	m_busyTimer.start();	
+	//m_busy = true;
+	//m_busyTimer.start();	
 	m_status = WXSI_DISCONNECT;
 	m_timer.start();
 }
@@ -714,9 +789,9 @@ void CWiresX::processDisconnect(const unsigned char* source)
 	if (source != NULL)
 		::LogDebug("Received Disconect from %10.10s", source);
 
-	m_reflector = NULL;
+//	m_reflector = NULL;
 
-	m_status = WXSI_DISCONNECT;
+	m_status = WXSI_NONE;
 	m_timer.start();
 }
 
@@ -724,7 +799,12 @@ void CWiresX::clock(unsigned int ms)
 {
 	m_timer.clock(ms);
 	m_ptimer.clock(ms);
-	m_timeout.clock(ms);	
+	m_timeout.clock(ms);
+
+	if ((m_ysfWatch.elapsed()>90U) && (m_ambefile!=NULL)) {
+		sendAMBEMode1();
+		return;
+	}
 	
 	if (m_timer.isRunning() && m_timer.hasExpired()) {
 		switch (m_status) {
@@ -769,7 +849,10 @@ void CWiresX::clock(unsigned int ms)
 			break;
 	    case WXSI_SEND_PREPLY:
 			makeEndPicture();
-			break;			
+			break;	
+		case WXSI_SEND_VREPLY:
+			sendUploadVoiceReply();
+			break;							
 		default:
 			break;
 		}
@@ -809,17 +892,19 @@ void CWiresX::clock(unsigned int ms)
 
 	
 
-/*	if (m_txWatch.elapsed() > 90U) {
-		if (!m_bufferTX.isEmpty() && m_bufferTX.dataSize() >= 155U) {
-			unsigned char len = 0U;
-			m_bufferTX.getData(&len, 1U);
-			if (len == 155U) {
-				m_bufferTX.getData(buffer, 155U);
-				m_network->write(buffer);
-			}
-		}
-		m_txWatch.start();
-	} */
+	// if (m_txWatch.elapsed() > 90U) {
+	// 	unsigned char buffer[155U];
+
+	// 	if (!m_bufferTX.isEmpty() && m_bufferTX.dataSize() >= 155U) {
+	// 		unsigned char len = 0U;
+	// 		m_bufferTX.getData(&len, 1U);
+	// 		if (len == 155U) {
+	// 			m_bufferTX.getData(buffer, 155U);
+	// 			m_network->write(buffer);
+	// 		}
+	// 	}
+	// 	m_txWatch.start();
+	// } 
 
 	m_busyTimer.clock(ms);
 	if (m_busyTimer.isRunning() && m_busyTimer.hasExpired()) {
@@ -957,15 +1042,10 @@ void CWiresX::createReply(const unsigned char* data, unsigned int length, const 
 
 void CWiresX::writeData(const unsigned char* buffer)
 {
-/*	if (isYSF2XX) {
-		// Send YSF2XXX Wires-X reply directly to the network
-		network->write(buffer);
-	} else {
-		// Send host Wires-X reply using ring buffer
-		unsigned char len = 155U;
-		m_bufferTX.addData(&len, 1U);
-		m_bufferTX.addData(buffer, len);
-	} */
+	// Send host Wires-X reply using ring buffer
+	// unsigned char len = 155U;
+	// m_bufferTX.addData(&len, 1U);
+	// m_bufferTX.addData(buffer, len);
 //	::LogMessage("Writing buffer.");
 	m_network->write(buffer);
 }
@@ -1456,55 +1536,90 @@ void CWiresX::sendListReply()
 void CWiresX::sendGetMessageReply()
 {
 	unsigned char data[1100U];
+	char name[40U];
+	char tmp[20U];	
 	unsigned int offset;
 	bool valid;
 
 	::memset(data, 0x00U, 1100U);
 
-	offset=5U;
-	offset+=m_storage->GetMessage(data,m_number,m_news_source);
-	if (offset!=5U) valid=true;
-	else valid=false;
-
-	if (data[0]=='T') {
+	if (voice_data[0] =='V') {
 		m_end_picture=true;
-		data[0U] = m_seqNo;
 
-		for (unsigned int i = 0U; i < 4U; i++)
-			data[i + 1U] = GET_MSG_RESP[i];
+		strcpy(name,(char *)(voice_data+1));
+		// Play message mode 1
+		LogMessage("Playing Voice Message file: %s",name);
+		m_ambefile = fopen(name,"rb");
+		if (m_ambefile) {
+			LogMessage("File open successfully.");
+			m_status = WXSI_PLAY_AMBE;
+		} else m_status = WXSI_NONE;
 
-		::LogMessage("Sending Message Request");
-
-		data[offset + 0U] = 0x03U;			// End of data marker
-		data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
-
-		//CUtils::dump("Message Reply", data, offset + 2U);
-		LogMessage("Message Reply");
-
-		createReply(data, offset + 2U, m_source.c_str());
+		offset = 100U;
+		voice_data[offset] = m_seqNo;
 		m_seqNo++;
-	}
-	else {
-		data[0U] = m_seqNo;
+		memcpy(voice_data+offset+1,VOICE_RESP,4U);
+		offset+=5U;
+		memcpy(voice_data+offset,voice_mark,14U);
+		offset+=14U;
+		sprintf(tmp,"    %05d",atoi((char *)m_news_source));
+		memcpy(voice_data+offset,tmp,9U);
+		offset+=9U;
+		sprintf(tmp,"     %05d",m_number);
+		memcpy(voice_data+offset,tmp,10U);
 
-		for (unsigned int i = 0U; i < 4U; i++)
-			data[i + 1U] = PICT_PREAMB_RESP[i];
 
-		::LogMessage("Sending Picture Header Request");
+		offset=194U;
+		voice_data[offset] = 0x03U;			// End of data marker
+		voice_data[offset+1] = CCRC::addCRC(voice_data+100U, 94U);
 
-		data[offset + 0U] = 0x03U;			// End of data marker
-		data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
+		CUtils::dump(1U,"Voice Data Block",voice_data+100U,100U);
 
-		//CUtils::dump("First Picture Preamble Reply", data, offset + 2U);
-		LogMessage("First Picture Preamble Reply");
-		m_seqNo+=3;
+	} else {
+		offset=5U;
+		offset+=m_storage->GetMessage(data,m_number,m_news_source);
+		if (offset!=5U) valid=true;
+		else valid=false;
 
-		createReply(data, offset + 2U, m_source.c_str());
+		if (data[0]=='T') {
+			m_end_picture=true;
+			data[0U] = m_seqNo;
 
-		// Return if not valid resource
-		if (!valid) m_picture_state = WXPIC_NONE;
-		else m_picture_state = WXPIC_BEGIN;
-		m_ptimer.start(1,500);
+			for (unsigned int i = 0U; i < 4U; i++)
+				data[i + 1U] = GET_MSG_RESP[i];
+
+			::LogMessage("Sending Message Request");
+
+			data[offset + 0U] = 0x03U;			// End of data marker
+			data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
+
+			//CUtils::dump("Message Reply", data, offset + 2U);
+			LogMessage("Message Reply");
+
+			createReply(data, offset + 2U, m_source.c_str());
+			m_seqNo++;
+		} else {
+			data[0U] = m_seqNo;
+
+			for (unsigned int i = 0U; i < 4U; i++)
+				data[i + 1U] = PICT_PREAMB_RESP[i];
+
+			::LogMessage("Sending Picture Header Request");
+
+			data[offset + 0U] = 0x03U;			// End of data marker
+			data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
+
+			CUtils::dump("First Picture Preamble Reply", data, offset + 2U);
+			//LogMessage("First Picture Preamble Reply");
+			m_seqNo+=2;
+
+			createReply(data, offset + 2U, m_source.c_str());
+
+			// Return if not valid resource
+			if (!valid) m_picture_state = WXPIC_NONE;
+			else m_picture_state = WXPIC_BEGIN;
+			m_ptimer.start(1,500);
+		}
 	}
 }
 
@@ -1528,8 +1643,8 @@ void CWiresX::sendPictureBegin()
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	//CUtils::dump("Second Picture Preamble Reply", data, offset + 2U);
-	LogMessage("Second Picture Preamble Reply");
+	CUtils::dump("Second Picture Preamble Reply", data, offset + 2U);
+	//LogMessage("Second Picture Preamble Reply");
 	m_seqNo++;
 
 	createReply(data, offset + 2U, m_source.c_str());
@@ -1555,8 +1670,9 @@ void CWiresX::sendPictureData()
 	data[m_offset + 10U] = 0x03U;			// End of data marker
 	data[m_offset + 11U] = CCRC::addCRC(data, m_offset + 11U);
 
-	//CUtils::dump("Picture Data Reply", data, m_offset + 12U);
-	LogMessage("Picture Data Reply");
+	LogMessage("Block size: %d",m_offset+3);
+	CUtils::dump("Picture Data Reply", data, m_offset + 12U);
+	//LogMessage("Picture Data Reply");
 	m_seqNo++;
 
 	createReply(data, m_offset + 12U, m_source.c_str());
@@ -1586,8 +1702,8 @@ void CWiresX::sendPictureEnd()
 
 	unsigned char num_seq=m_storage->GetPictureSeq();
 
-	char tmp[7]={0x50,0x00,0x00,0x00,0x05,0xCA,0x82};
-	tmp[2U]=num_seq;
+	char tmp[7]={0x50,0x00,0x01,0x00,0x05,0xCA,0x82};
+	tmp[2U]=num_seq+1;
 	// Put sum of all bytes
 	sum = m_storage->GetSumCheck();
 	tmp[4]=(sum>>16)&0xFF;
@@ -1599,8 +1715,8 @@ void CWiresX::sendPictureEnd()
 	data[12] = 0x03U;			// End of data marker
 	data[13] = CCRC::addCRC(data, 13U);
 
-	//CUtils::dump("Picture End Reply", data, 14U);
-	LogMessage("Picture End Reply");
+	CUtils::dump("Picture End Reply", data, 14U);
+	//LogMessage("Picture End Reply");
 	m_seqNo++;
 
 	createReply(data, 14U, m_source.c_str());
@@ -1649,26 +1765,31 @@ void CWiresX::sendUploadReply(bool pict)
 
 void CWiresX::sendUploadVoiceReply()
 {
-	unsigned char data[1100U];
-	::memset(data, 0x00U, 1100U);
+	unsigned char data[30U];
+	static unsigned int index=1;
+	::memset(data, 0x00U, 30U);
 
 	data[0U] = m_seqNo;
 
 	for (unsigned int i = 0U; i < 4U; i++)
 		data[i + 1U] = VOICE_ACK[i];
 
-	::sprintf((char *)(data+5U),"01");
-	::sprintf((char *)(data+7U),"01");
-	::sprintf((char *)(data+12U),"          0");
+	::sprintf((char *)(data+5U),"01");  //num of items
+
+	for (unsigned int i = 0U; i < 5U; i++)
+		data[i + 7U] = m_id.at(i);	
+
+	::sprintf((char *)(data+12U),"      %05d",index); //select item of items
 	data[23U]=0x0DU;
+	index++;
 
 	::LogMessage("Sending Voice Upload ACK");
 
 	data[24U] = 0x03U;			// End of data marker
 	data[25U] = CCRC::addCRC(data, 25U);
 
-	//CUtils::dump("Upload Voice ACK", data, 26U);
-	LogMessage("Upload Voice ACK");
+	CUtils::dump("Upload Voice ACK", data, 26U);
+	//LogMessage("Upload Voice ACK");
 
 	createReply(data, 26U, m_source.c_str());
 
@@ -1909,8 +2030,8 @@ void CWiresX::makeEndPicture()
 
 	unsigned char num_seq=m_storage->GetPictureSeq();
 
-	char tmp[7]={0x50,0x00,0x00,0x00,0x05,0xCA,0x82};
-	tmp[2U]=num_seq;
+	char tmp[7]={0x50,0x00,0x01,0x00,0x05,0xCA,0x82};
+	tmp[2U]=num_seq+1;
 	// Put sum of all bytes
 	sum = m_storage->GetSumCheck();
 	tmp[4]=(sum>>16)&0xFF;
@@ -1922,8 +2043,8 @@ void CWiresX::makeEndPicture()
 	data[12] = 0x03U;			// End of data marker
 	data[13] = CCRC::addCRC(data, 13U);
 
-	//CUtils::dump("Picture End Reply", data, 14U);
-	LogMessage("Picture End Reply");
+	CUtils::dump("Picture End Reply", data, 14U);
+	//LogMessage("Picture End Reply");
 	m_seqNo++;
 
 	createReply(data, 14U, m_source.c_str());
@@ -2066,4 +2187,70 @@ void CWiresX::makePacket(CYSFNetwork* ysfNetwork, unsigned char *data, unsigned 
 bool CWiresX::sendNetwork(void) {
 		
 	return m_sendNetwork;
+}
+
+void CWiresX::sendAMBEMode1(void) {
+unsigned char buffer[40U];
+unsigned int count;
+static bool start=true;
+
+    //LogMessage("Send AMBE");
+	if (start) {
+		LogMessage("Start NEWS AUDIO Playing...");
+		m_conv->putDMRHeader();
+		m_ysfWatch.start();
+		start = false;
+		return;
+	} else {
+		//LogMessage("New Packet...");
+		count = fread(buffer,1U,40U,m_ambefile);
+		if (count < 40U) {
+			LogMessage("Finish voice playing.");
+			fclose(m_ambefile);
+			m_ambefile = NULL;
+			m_conv->putDMREOT(true);
+			m_status = WXSI_NONE;
+			//m_ysfWatch.stop();
+			start = true;
+			return;
+		}
+		m_conv->AMB2YSF_Mode1(buffer);
+		m_conv->AMB2YSF_Mode1(buffer+8U);
+		m_conv->AMB2YSF_Mode1(buffer+16U);
+		m_conv->AMB2YSF_Mode1(buffer+24U);
+		m_conv->AMB2YSF_Mode1(buffer+32U);		
+		m_ysfWatch.start();
+	}
+}
+
+void CWiresX::getMode1DCH(unsigned char *dch,unsigned int fn) {
+static unsigned int offset;
+
+	switch (fn) {
+		case 0:
+		// Callsign of node
+			memset(dch,'*',YSF_CALLSIGN_LENGTH);
+			memcpy(dch+YSF_CALLSIGN_LENGTH,m_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+			break;
+		case 1:
+		// Callsign of source
+			memcpy(dch,m_source.c_str(),YSF_CALLSIGN_LENGTH);
+			memcpy(dch,m_source.c_str(),YSF_CALLSIGN_LENGTH);
+			break;
+		case 2:
+		// Number of repeater
+			memcpy(dch,m_id.c_str(),YSF_CALLSIGN_LENGTH);
+			memcpy(dch,m_id.c_str(),YSF_CALLSIGN_LENGTH);			
+			break; 
+		case 3:
+			offset = 100U;
+			memcpy(dch,(char *)(voice_data+offset),YSF_CALLSIGN_LENGTH*2);
+			offset += 20U;
+			break;									
+		default:	
+ 			memcpy(dch,(char *)(voice_data+offset),YSF_CALLSIGN_LENGTH*2);
+			offset += 20U;
+			break;
+	}					
+	
 }
