@@ -47,6 +47,9 @@ public:
 
 	void clock(unsigned int ms);
 
+	unsigned int getRoomID();
+	bool connected();
+	bool id_getresponse();
 	void close();
 
 private:
@@ -60,6 +63,10 @@ private:
 	CTimer                     m_pollTimer;
 	std::string                m_name;
 	bool                       m_linked;
+	bool                       m_id_response;
+	unsigned int			   m_room_id;					
+
+	void RoomID();
 };
 
 #endif

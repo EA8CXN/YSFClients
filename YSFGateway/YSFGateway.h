@@ -82,6 +82,7 @@ private:
 	bool 			 m_tgConnected;
 	CStopWatch 		 m_TGChange;
 	CStopWatch 		 m_stopWatch;
+	CStopWatch 		 m_dgid_timer;	
 	TG_STATUS 		 m_TG_connect_state;	
 	std::string      m_xlxmodule;
 	bool             m_xlxConnected;

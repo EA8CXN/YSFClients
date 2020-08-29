@@ -52,6 +52,9 @@ m_linked(false)
 		m_poll[i + 4U] = node.at(i);
 		m_unlink[i + 4U] = node.at(i);
 	}
+
+	m_id_response = false;
+	m_room_id = 0;	
 }
 
 CYSFNetwork::CYSFNetwork(unsigned int port, const std::string& callsign, bool debug) :
@@ -77,6 +80,9 @@ m_pollTimer(1000U, 5U)
 		m_poll[i + 4U]   = node.at(i);
 		m_unlink[i + 4U] = node.at(i);
 	}
+
+	m_id_response = false;
+	m_room_id = 0;
 }
 
 CYSFNetwork::~CYSFNetwork()
@@ -97,6 +103,8 @@ void CYSFNetwork::setDestination(const std::string& name, const in_addr& address
 	m_address = address;
 	m_port    = port;
 	m_linked  = false;
+	m_id_response = false;
+	m_room_id = 0;	
 }
 
 void CYSFNetwork::clearDestination()
@@ -104,6 +112,8 @@ void CYSFNetwork::clearDestination()
 	m_address.s_addr = INADDR_NONE;
 	m_port           = 0U;
 	m_linked         = false;
+	m_id_response = false;
+	m_room_id = 0;
 
 	m_pollTimer.stop();
 }
@@ -143,7 +153,11 @@ void CYSFNetwork::writeUnlink(unsigned int count)
 		m_socket.write(m_unlink, 14U, m_address, m_port);
 
 	m_linked = false;
+	m_id_response = false;
+	m_room_id = 0;	
 }
+
+unsigned char m_getid[] = "YSFQ";
 
 void CYSFNetwork::clock(unsigned int ms)
 {
@@ -168,10 +182,17 @@ void CYSFNetwork::clock(unsigned int ms)
 	if (::memcmp(buffer, "YSFP", 4U) == 0 && !m_linked) {
 		if (strcmp(m_name.c_str(),"MMDVM")== 0)
 			LogMessage("Link successful to %s", m_name.c_str());
-		else
+		else {
 			LogMessage("Linked to %s", m_name.c_str());
-
+			m_socket.write(m_getid, 4U, m_address, m_port);
+		}
 		m_linked = true;
+	}
+
+	if ((::memcmp(buffer, "YSFQ", 4U) == 0) && m_linked) {
+		buffer[length]=0;
+		m_room_id = atoi((const char*)(buffer+4));
+		m_id_response = true;	
 	}
 
 	if (m_debug)
@@ -203,4 +224,17 @@ void CYSFNetwork::close()
 	m_socket.close();
 
 	LogMessage("Closing YSF network connection");
+}
+
+
+unsigned int CYSFNetwork::getRoomID() {
+	return m_room_id;
+}
+
+bool CYSFNetwork::connected() {
+	return m_linked;
+}
+
+bool CYSFNetwork::id_getresponse() {
+	return m_id_response;
 }

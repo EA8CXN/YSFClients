@@ -56,7 +56,6 @@ public:
 	unsigned int GetSumCheck();
 	void PictureEnd(bool);
     void VoiceEnd(unsigned int);
-	void UpdateReflectorType(unsigned int type);
 	
 private:
 	std::string 	m_callsign;
@@ -75,6 +74,9 @@ private:
 	char			m_reflector_type[4];
 	
 	void UpdateIndex(wiresx_record *);
+	FILE *getIndexFile(unsigned int *,bool);
+	unsigned int getNextIndex();
+	void ConvertGPS(char* data,char *output);
 
 };
 

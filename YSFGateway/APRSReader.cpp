@@ -344,7 +344,11 @@ int lat, lon;
 	buffer[0]=m_gps_buffer_cnt%0xFF;
 	m_gps_buffer_cnt++;
 	CrcGPS(buffer);
-	
+
+	if (callsign.compare(std::string("PARROT")) == 0) return;
+	if (callsign.compare(std::string("LOCAL")) == 0) return;
+	if (callsign.compare(std::string("UNLINK")) == 0) return;	
+
 	if (!callsign.empty()) 
 		if (findCall(callsign, &lat, &lon)) 
 			formatGPS(buffer, lat, lon);

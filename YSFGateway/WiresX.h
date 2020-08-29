@@ -139,7 +139,7 @@ private:
 	bool            m_busy;
 	CTimer          m_busyTimer;
 	CStopWatch      m_txWatch;
-	//CRingBuffer<unsigned char> m_bufferTX;
+	CRingBuffer<unsigned char> m_bufferTX;
 	unsigned char 		 m_type;
 	unsigned int         m_number;
 	unsigned char        m_news_source[5];
@@ -166,13 +166,13 @@ private:
 	void processAll(const unsigned char* source, const unsigned char* data);
 	
 	void processCategory(const unsigned char* source, const unsigned char* data);
-	void processListDown(const unsigned char* source, const unsigned char* data);
+	bool processListDown(const unsigned char* source, const unsigned char* data);
 	WX_STATUS processGetMessage(const unsigned char* source, const unsigned char* data);
 	WX_STATUS processUploadMessage(const unsigned char* source, const unsigned char* data, unsigned int gps);
 	WX_STATUS processUploadPicture(const unsigned char* source, const unsigned char* data, unsigned int gps);
 	void processPictureACK(const unsigned char* source, const unsigned char* data);
 	void processDataPicture(const unsigned char* data, unsigned int size);
-	void processNews(const unsigned char* source, const unsigned char* data);
+	bool processNews(const unsigned char* source, const unsigned char* data);
 	void processVoiceACK();
 	void sendDXReply();
 	void sendAllReply();
@@ -197,6 +197,7 @@ private:
 	void makeConnect();	
 	void makePacket(CYSFNetwork* ysfNetwork, unsigned char *data, unsigned int length);
 	void makeEndPicture(void);
+	bool NewsForMe(const unsigned char* data, const unsigned int offset);
 };
 
 #endif

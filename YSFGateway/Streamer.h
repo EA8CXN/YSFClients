@@ -98,6 +98,7 @@ public:
     void SendDummyDMR(unsigned int srcid,unsigned int dstid, FLCO dmr_flco);
     void SendDummyYSF(CYSFNetwork *ysf_network, unsigned int dg_id);
     CWiresX* createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::string callsign, std::string location);
+    void SendFinalPTT();
 
 private:
 

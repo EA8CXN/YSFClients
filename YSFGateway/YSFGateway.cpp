@@ -162,6 +162,8 @@ CYSFGateway::~CYSFGateway()
 
 }
 
+bool first_time_ysf_dgid = true;
+
 int CYSFGateway::run()
 {
 	bool ret = m_conf.read();
@@ -417,7 +419,8 @@ int CYSFGateway::run()
 	m_Streamer->createGPS(m_callsign);
 	m_Streamer->setBeacon(m_conf.getBeaconPath(),m_inactivityTimer,&m_lostTimer, m_NoChange, m_DGID);
 	m_wiresX = m_Streamer->createWiresX(&rptNetwork, m_conf.getWiresXMakeUpper(), m_callsign, m_conf.getLocation());	 	
-		
+	m_Streamer->Init(&rptNetwork, m_ysfNetwork, m_fcsNetwork, m_dmrNetwork, m_dmrReflectors);
+
 	if (startupLinking()==false) {
 		LogMessage("Cannot conect to startup reflector. Exiting...");
 		rptNetwork.close();
@@ -443,14 +446,15 @@ int CYSFGateway::run()
 	};
 	
 	m_stopWatch.start();
+	m_dgid_timer.start();
 
 	LogMessage("Starting YSFGateway-%s", VERSION);
 
 	m_TG_connect_state = TG_NONE;
 	unsigned int ms=0;
-	
-	m_Streamer->Init(&rptNetwork, m_ysfNetwork, m_fcsNetwork, m_dmrNetwork, m_dmrReflectors);
 
+
+	
 	for (;end == 0;) {
 
 		// DMR connect logic
@@ -520,7 +524,9 @@ int CYSFGateway::run()
 					m_lostTimer.stop();
 					startupReLinking();
 					m_lostTimer.start();
-				} else if (m_tg_type == YSF) m_Streamer->SendDummyYSF(m_ysfNetwork, m_DGID);
+				} 
+				first_time_ysf_dgid = true;
+				m_dgid_timer.start();
 				m_inactivityTimer->start();
 			} 
 		}
@@ -537,6 +543,12 @@ int CYSFGateway::run()
 			m_inactivityTimer->start();
 			m_lostTimer.start();			
 		} */
+		if (m_ysfNetwork != NULL && first_time_ysf_dgid) {
+			if (m_ysfNetwork->id_getresponse() || (m_dgid_timer.elapsed() > 4000U)) {
+				m_Streamer->SendDummyYSF(m_ysfNetwork,m_DGID);
+				first_time_ysf_dgid = false;
+			}
+		}
 
 		if (ms < 5U)
 			CThread::sleep(5U);
@@ -753,14 +765,6 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
     TG_TYPE last_type=m_tg_type;
 	int tglistOpt;
 
-	if (m_tg_type == DMR && m_dmr_closed) {
-		m_dmr_closed = false;
-	} else if (m_tg_type == FCS && m_fcs_closed) {
-		m_fcs_closed = false;			
-	} else if (m_tg_type == YSF && m_ysf_closed) {
-		m_ysf_closed = false;
-	}	
-	
 	if (dstID < 6) {
 		dstID--;
 		if (dstID==0){
@@ -866,7 +870,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 					m_wiresX->setReflectors(m_ysfReflectors);					
 					m_wiresX->setReflector(reflector, dstID);
 					m_last_YSF_TG = dstID;
-					m_Streamer->SendDummyYSF(m_ysfNetwork, m_DGID);
+					first_time_ysf_dgid = true;
+					m_dgid_timer.start();
 					} else return false;
 				}  else return false;
 			}
@@ -1345,7 +1350,7 @@ unsigned int tmp_srcid;
 					}
 					break;
 				case SEND_REPLY:
-					if (m_TGChange.elapsed() > 100) {
+					if (m_Streamer->not_busy() && m_TGChange.elapsed() > 600) {
 						m_TGChange.start();
 						m_TG_connect_state = SEND_PTT;				
 						m_wiresX->SendCReply();
@@ -1354,13 +1359,14 @@ unsigned int tmp_srcid;
 					break;
 				case SEND_PTT:
 				//	if (m_TGChange.elapsed() > 200) {				
-					if (m_Streamer->not_busy() && !m_wiresX->isBusy() && (m_TGChange.elapsed() > 100U)) {
+					if (m_Streamer->not_busy() && !m_wiresX->isBusy() && (m_TGChange.elapsed() > 900U)) {
 						m_TGChange.start();
 						m_lostTimer.start();
 						m_TG_connect_state = TG_NONE;
 						if (m_ptt_dstid) {
 							LogMessage("Sending PTT: Src: %d Dst: %s%d", tmp_srcid, m_ptt_pc ? "" : "TG ", m_ptt_dstid);
-							m_Streamer->SendDummyDMR(tmp_srcid, m_ptt_dstid, m_ptt_pc ? FLCO_USER_USER : FLCO_GROUP);
+							m_Streamer->SendFinalPTT();
+							//m_Streamer->SendDummyDMR(tmp_srcid, m_ptt_dstid, m_ptt_pc ? FLCO_USER_USER : FLCO_GROUP);
 						}
 						//m_not_busy=true;
 					}
@@ -1379,7 +1385,8 @@ unsigned int tmp_srcid;
 				m_lostTimer.start();
 				if (m_ptt_dstid) {
 					LogMessage("Sending PTT in TG Timeout: Src: %d Dst: %s%d", tmp_srcid, m_ptt_pc ? "" : "TG ", m_ptt_dstid);
-					m_Streamer->SendDummyDMR(tmp_srcid, m_ptt_dstid, m_ptt_pc ? FLCO_USER_USER : FLCO_GROUP);
+					m_Streamer->SendFinalPTT();
+					//m_Streamer->SendDummyDMR(tmp_srcid, m_ptt_dstid, m_ptt_pc ? FLCO_USER_USER : FLCO_GROUP);
 				}				
 			} 
 		} 

@@ -41,7 +41,9 @@ const unsigned char DISC_REQ[]  = {0x5DU, 0x2AU, 0x5FU};
 const unsigned char ALL_REQ[]   = {0x5DU, 0x66U, 0x5FU};
 const unsigned char NEWS_REQ[]  = {0x5DU, 0x63U, 0x5FU};
 const unsigned char CAT_REQ[]   = {0x5DU, 0x67U, 0x5FU};
-const unsigned char BEACON_REQ[]   = {0x47U, 0x64U, 0x5FU};
+
+const unsigned char BEACON_REQ_GPS[]   = {0x47U, 0x64U, 0x5FU};
+const unsigned char BEACON_REQ_NOGPS[]   = {0x47U, 0x63U, 0x5FU};
 
 const unsigned char DX_RESP[]   = {0x5DU, 0x51U, 0x5FU, 0x26U};
 const unsigned char DX_BEACON[]   = {0x5DU, 0x42U, 0x5FU, 0x26U};
@@ -128,7 +130,7 @@ m_makeUpper(makeUpper),
 m_busy(false),
 m_busyTimer(1000U, 1U),
 m_txWatch(),
-//m_bufferTX(10000U, "YSF Wires-X TX Buffer"),
+m_bufferTX(10000U, "YSF Wires-X TX Buffer"),
 m_type(0U),
 m_number(0U),
 m_news_source(),
@@ -242,7 +244,8 @@ static FILE *fileambe;
 static unsigned int size;
 static std::string filename;
 
-	if (m_last_news == 0) m_last_news =  17707U; //return WXS_FAIL;
+	size = atoi(m_id.c_str());
+	if (m_last_news != size) return WXS_FAIL;
 
 	if (fi == YSF_FI_HEADER) {
 		// open file
@@ -252,7 +255,7 @@ static std::string filename;
 		size=0;
 		if (!fileambe) {
 			LogMessage("Error writing fileambe.");
-			return WXS_FAIL;
+			return WXS_NONE;
 		} else LogMessage("Writing AMBE file: %s", filename.c_str());
 	} else if (fi == YSF_FI_COMMUNICATIONS) {
 		// convert and write file
@@ -263,7 +266,7 @@ static std::string filename;
 		m_storage->VoiceEnd(size);
 		if (fileambe) fclose(fileambe);
 		processVoiceACK();
-
+		m_last_news = 0;
 		// // Play message mode 1
 		// LogMessage("Playing Voice Message file: %s",filename.c_str());
 		// m_ambefile = fopen(filename.c_str(),"rb");
@@ -377,19 +380,21 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 			LogMessage("Connect command");
 			return processConnect(source, m_command + 5U);
 		} else if (::memcmp(m_command + 1U, NEWS_REQ, 3U) == 0) {
-			m_sendNetwork = false;
+			
 			//CUtils::dump("News command", m_command, cmd_len);
 			LogMessage("News command");
-			processNews(source, m_command + 5U);
+			if (processNews(source, m_command + 5U)) m_sendNetwork = true;
+			else m_sendNetwork = false;
 			return WXS_NEWS;
 		} else if (::memcmp(m_command + 1U, LIST_REQ, 3U) == 0) {
-			m_sendNetwork = false;
+			//m_sendNetwork = false;
 			//CUtils::dump("List for Download command", m_command, cmd_len);
 			LogMessage("List for Download command");
-			processListDown(source, m_command + 5U);
+			if (processListDown(source, m_command + 5U)) m_sendNetwork = true;
+			else m_sendNetwork = false;
 			return WXS_LIST;
 		} else if (::memcmp(m_command + 1U, GET_RSC, 3U) == 0) {
-			m_sendNetwork = false;
+			//m_sendNetwork = false;
 			//CUtils::dump("Get Message command", m_command, cmd_len);
 			LogMessage("Get Message command");
 			return processGetMessage(source, m_command + 5U);
@@ -448,10 +453,14 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 			m_sendNetwork = false;
 			processCategory(source, m_command + 5U);
 			return WXS_NONE;
-		} else if (::memcmp(m_command + 1U, BEACON_REQ, 3U) == 0) {
-			LogMessage("Detected GM Beacon.");
+		} else if (::memcmp(m_command + 1U, BEACON_REQ_GPS, 3U) == 0) {
+			LogMessage("Detected GM with GPS Information Beacon.");
 			m_sendNetwork = false;
 			return WXS_NONE;
+		} else if (::memcmp(m_command + 1U, BEACON_REQ_NOGPS, 3U) == 0) {
+			LogMessage("Detected GM without GPS Information Beacon.");
+			m_sendNetwork = false;
+			return WXS_NONE;			
 		} else {
 			CUtils::dump("Unknown Wires-X command", m_command, cmd_len);
 			return WXS_FAIL;
@@ -485,8 +494,6 @@ void CWiresX::setReflector(CReflector* reflector, int dstID)
 {
 	m_reflector = reflector;
 	m_dstID = dstID;
-	if (reflector) m_storage->UpdateReflectorType(reflector->m_type);
-	else m_storage->UpdateReflectorType(DMR);
 }
 
 void CWiresX::processDX(const unsigned char* source)
@@ -579,114 +586,124 @@ void CWiresX::processAll(const unsigned char* source, const unsigned char* data)
 	}
 }
 
-void CWiresX::processNews(const unsigned char* source, const unsigned char* data)
-{
-	m_busy = true;
-	m_busyTimer.start();
+bool CWiresX::NewsForMe(const unsigned char* data, const unsigned int offset) {
+	char local[6];
+	char news_source[6];
+
+    ::memcpy(m_news_source,((const char *)data) + offset,5U);
+	::memcpy(news_source,m_news_source,5U);
+	news_source[5]=0;
+	m_last_news = atoi(news_source);	
 	
-    ::memcpy(m_news_source,((const char *)data) + 0U,5U);
-	char tmp[6];
-	::memcpy(tmp,m_news_source,5U);
-	tmp[5]=0;
-	m_last_news = atoi(tmp);
-	::LogMessage("Received NEWS for \"%5.5s\" from %10.10s",tmp, source);
-
-	m_status = WXSI_NEWS;
-
-	m_timer.start();
+	sprintf(local,"%05u",atoi(m_id.c_str()));
+	if (::strcmp(news_source,local)==0) {
+		LogMessage("News for local node.");
+		return true;
+	} else return false;
 }
 
-void CWiresX::processListDown(const unsigned char* source, const unsigned char* data)
+bool CWiresX::processNews(const unsigned char* source, const unsigned char* data)
 {
 	m_busy = true;
 	m_busyTimer.start();
+
+	if (NewsForMe(data,0U)) {
+		::LogMessage("Received NEWS for \"%05d\" from %10.10s",m_last_news, source);		
+		m_status = WXSI_NEWS;
+		m_timer.start();
+		return false;
+	}
+	else return true;
+}
+
+bool CWiresX::processListDown(const unsigned char* source, const unsigned char* data)
+{
+	char buffer[4U];	
+
+	m_busy = true;
+	m_busyTimer.start();
 	
-	::memcpy(m_news_source,((const char *)data) + 0U,5U);
-	char tmp[6];
-	::memcpy(tmp,m_news_source,5U);
-	tmp[5]=0;
-	m_type = *(data+10U);
+	if (NewsForMe(data,0U)) {
+		m_type = *(data+10U);
+		::memcpy(buffer, data + 17U, 2U);
+		buffer[2U] = 0x00U;
+		m_start = ::atoi(buffer);
+		if (m_start > 0U)
+			m_start = (m_start-1)/2;
 
-	char buffer[4U];
-	::memcpy(buffer, data + 17U, 2U);
-	buffer[2U] = 0x00U;
+		::LogMessage("Received Download resource list item (%u) from  \"%05d\", type %c from %10.10s", m_start, m_last_news, m_type, source);	
 
-	m_start = ::atoi(buffer);
-	if (m_start > 0U)
-		m_start = (m_start-1)/2;
+		m_status = WXSI_LIST;
+		m_timer.start();		
+		return false;
+	}
+	else return true;
 
-	::LogMessage("Received Download resource list item (%u) from  \"%5.5s\", type %c from %10.10s", m_start, tmp, m_type, source);
-
-	m_status = WXSI_LIST;
-
-	m_timer.start();
 }
 
 unsigned char voice_data[200U];
 
 WX_STATUS CWiresX::processGetMessage(const unsigned char* source, const unsigned char* data)
 {
-	m_busy = true;
-	m_busyTimer.start();
 	char tmp[6];
 
-	::memcpy(m_news_source,((const char *)data) + 0U,5U);
-	::memcpy(tmp,(const char *)(data+14U),5U);
-	tmp[5]=0;
-	m_number = atoi(tmp);
+	m_busy = true;
+	m_busyTimer.start();
 
+	if (NewsForMe(data,0U)) {
+		::memcpy(tmp,(const char *)(data+14U),5U);
+		tmp[5]=0;
+		m_number = atoi(tmp);
+		::LogMessage("Received Get Message number %05u from %10.10s", m_number, source);
+		m_sendNetwork = false;
 
+		m_status = WXSI_GET_MESSAGE;
+		m_end_picture=false;
+		m_timer.start();
 
-	::LogMessage("Received Get Message number %05u from %10.10s", m_number, source);
-
-	m_status = WXSI_GET_MESSAGE;
-	m_end_picture=false;
-	m_timer.start();
-
-	m_storage->GetMessage(voice_data,m_number,m_news_source);
-	if (voice_data[0] == 'V') {
-		return WXS_PLAY;
+		m_storage->GetMessage(voice_data,m_number,m_news_source);
+		if (voice_data[0] == 'V') {
+			return WXS_PLAY;
+		}
+		else return WXS_NONE;
+	} else {
+		m_sendNetwork = true;		
+		return WXS_NONE;
 	}
-	else return WXS_NONE;
+
+
+
 }
 
 WX_STATUS CWiresX::processUploadPicture(const unsigned char* source, const unsigned char* data, unsigned int gps)
 {
-	char tmp1[6];
-	char tmp2[6];
-	char tmp3[6];
+	unsigned int offset;
 
 	m_end_picture=false;
 	error_upload=false;
 
+	if (gps) offset = 48U;
+	else offset=30U;
 
-	if (gps) ::memcpy(tmp1,data+48U,5U);
-	else ::memcpy(tmp1,data+30U,5U);
-	::sprintf(tmp2,"%05u",m_dstID);
-	tmp1[5U]=0;
-	sprintf(tmp3,"%05u",atoi(m_id.c_str()));
+	if (NewsForMe(data,offset)) {
+		::LogMessage("Received Picture Upload from %10.10s", source);
+		m_sendNetwork = false;
+		m_timeout.start();
+		m_busy = true;
+		m_busyTimer.start();
+		m_no_store_picture=false;
 
-	::LogMessage("Comparing %s con %s y con %s.",tmp1,tmp2,tmp3);
+		if (gps) ::memcpy(m_serial,data+18U,6U);
+		else ::memcpy(m_serial,data,6U);
 
-	// Compare To field from message to TG in use
-	// If same, this is a message for us
-	if ((::strcmp(tmp1,tmp2) != 0) &&
-		(::strcmp(tmp1,tmp3) != 0)) {
-		::LogMessage("Picture not for me.");
-		m_no_store_picture=true;
+		m_storage->StorePicture(data,source,gps);
+		return WXS_PICTURE;
+	} else {
+		m_sendNetwork = true;
+		m_no_store_picture=true;		
 		return WXS_NONE;
-	} else m_no_store_picture=false;
-	m_sendNetwork = false;
-	::LogMessage("Received Picture Upload from %10.10s", source);
-	m_timeout.start();
-	m_busy = true;
-	m_busyTimer.start();
-	
-	if (gps) ::memcpy(m_serial,data+18U,6U);
-	else ::memcpy(m_serial,data,6U);
+	}
 
-	m_storage->StorePicture(data,source,gps);
-	return WXS_PICTURE;
 }
 
 void CWiresX::processDataPicture(const unsigned char* data, unsigned int size)
@@ -720,40 +737,29 @@ void CWiresX::processVoiceACK()
 
 WX_STATUS CWiresX::processUploadMessage(const unsigned char* source, const unsigned char* data, unsigned int gps)
 {
-	char tmp1[6];
-	char tmp2[6];
-	char tmp3[6];
+	unsigned int offset;
 
-	if (gps) ::memcpy(tmp1,data+48U,5U);
-	else ::memcpy(tmp1,data+30U,5U);
-	::sprintf(tmp2,"%05u",m_dstID);
-	tmp1[5U]=0;
-	sprintf(tmp3,"%05u",atoi(m_id.c_str()));
+	m_end_picture=false;
+	error_upload=false;
 
-	::LogMessage("Comparing %s con %s y con %s.",tmp1,tmp2,tmp3);
+	if (gps) offset = 48U;
+	else offset=30U;
 
-	// Compare To field from message to TG in use
-	// If same, this is a message for us
-	if (::strcmp(tmp1,tmp2) != 0)
-		if (::strcmp(tmp1,tmp3) != 0) {
-		::LogMessage("Message not for me.");
+	if (NewsForMe(data,offset)) {
+		::LogMessage("Received Message Upload from %10.10s", source);
+		m_sendNetwork = false;
+		m_busy = true;
+		m_busyTimer.start();
+		if (gps) ::memcpy(m_serial,data+18U,6U);
+		else ::memcpy(m_serial,data,6U);
+		m_storage->StoreTextMessage(data,source,gps);
+		m_status = WXSI_UPLOAD_TXT;
+		m_timer.start();
+		return WXS_UPLOAD;
+	} else {
+		m_sendNetwork = true;		
 		return WXS_NONE;
 	}
-	m_busy = true;
-	m_busyTimer.start();
-	
-	m_sendNetwork = false;
-	::LogMessage("Received Message Upload from %10.10s", source);
-
-	if (gps) ::memcpy(m_serial,data+18U,6U);
-	else ::memcpy(m_serial,data,6U);
-
-	m_storage->StoreTextMessage(data,source,gps);
-
-	m_status = WXSI_UPLOAD_TXT;
-
-	m_timer.start();
-	return WXS_UPLOAD;
 }
 
 WX_STATUS CWiresX::processConnect(const unsigned char* source, const unsigned char* data)
@@ -768,15 +774,15 @@ WX_STATUS CWiresX::processConnect(const unsigned char* source, const unsigned ch
 }
 
 void CWiresX::SendCReply(void) {
-	//m_busy = true;
-	//m_busyTimer.start();
+	m_busy = true;
+	m_busyTimer.start();
 	m_status = WXSI_CONNECT;
 	m_timer.start();
 }
 
 void CWiresX::SendDReply(void) {
-	//m_busy = true;
-	//m_busyTimer.start();	
+	m_busy = true;
+	m_busyTimer.start();	
 	m_status = WXSI_DISCONNECT;
 	m_timer.start();
 }
@@ -788,8 +794,6 @@ void CWiresX::processDisconnect(const unsigned char* source)
 	
 	if (source != NULL)
 		::LogDebug("Received Disconect from %10.10s", source);
-
-//	m_reflector = NULL;
 
 	m_status = WXSI_NONE;
 	m_timer.start();
@@ -892,19 +896,19 @@ void CWiresX::clock(unsigned int ms)
 
 	
 
-	// if (m_txWatch.elapsed() > 90U) {
-	// 	unsigned char buffer[155U];
+	if (m_txWatch.elapsed() > 90U) {
+		unsigned char buffer[155U];
 
-	// 	if (!m_bufferTX.isEmpty() && m_bufferTX.dataSize() >= 155U) {
-	// 		unsigned char len = 0U;
-	// 		m_bufferTX.getData(&len, 1U);
-	// 		if (len == 155U) {
-	// 			m_bufferTX.getData(buffer, 155U);
-	// 			m_network->write(buffer);
-	// 		}
-	// 	}
-	// 	m_txWatch.start();
-	// } 
+		if (!m_bufferTX.isEmpty() && m_bufferTX.dataSize() >= 155U) {
+			unsigned char len = 0U;
+			m_bufferTX.getData(&len, 1U);
+			if (len == 155U) {
+				m_bufferTX.getData(buffer, 155U);
+				m_network->write(buffer);
+			}
+		}
+		m_txWatch.start();
+	} 
 
 	m_busyTimer.clock(ms);
 	if (m_busyTimer.isRunning() && m_busyTimer.hasExpired()) {
@@ -1043,11 +1047,11 @@ void CWiresX::createReply(const unsigned char* data, unsigned int length, const 
 void CWiresX::writeData(const unsigned char* buffer)
 {
 	// Send host Wires-X reply using ring buffer
-	// unsigned char len = 155U;
-	// m_bufferTX.addData(&len, 1U);
-	// m_bufferTX.addData(buffer, len);
+	unsigned char len = 155U;
+	m_bufferTX.addData(&len, 1U);
+	m_bufferTX.addData(buffer, len);
 //	::LogMessage("Writing buffer.");
-	m_network->write(buffer);
+	//m_network->write(buffer);
 }
 
 unsigned char CWiresX::calculateFT(unsigned int length, unsigned int offset) const
@@ -1068,9 +1072,6 @@ unsigned char CWiresX::calculateFT(unsigned int length, unsigned int offset) con
 
 	return 1U;
 }
-
-
-
 
 void CWiresX::sendDXReply()
 {
@@ -1131,12 +1132,6 @@ void CWiresX::sendDXReply()
 		char tmp[10];
 		snprintf(tmp, sizeof(tmp), "%05d",atoi(m_reflector->m_id.c_str()));
 		std::string buffAsStdStr = tmp;
-		
-		/*LogMessage("Id: \"%s\"",buffAsStdStr.c_str());
-		LogMessage("Name: \"%s\"",m_reflector->m_name.c_str());
-		LogMessage("Count: \"%s\"",m_reflector->m_count.c_str());
-		LogMessage("Desc: \"%s\"",m_reflector->m_desc.c_str());	*/		
-
 		for (unsigned int i = 0U; i < 5U; i++)
 			data[i + 36U] = buffAsStdStr.at(i);
 
@@ -1179,31 +1174,6 @@ void CWiresX::sendDXReply()
 
 	m_seqNo++;
 }
-
-/* std::string CWiresX::NameTG(unsigned int SrcId){
-	char buf1[20];
-
-		if (SrcId > 99999U)
-			sprintf(buf1, "CALL %d", SrcId);
-		else if (SrcId == 9U)
-			strcpy(buf1, "LOCAL");
-		else if (SrcId == 9990U)
-			strcpy(buf1, "PARROT");
-		else if (SrcId == 4000U)
-			strcpy(buf1, "UNLINK");
-		else {
-			CTGReg* refl = findById(SrcId);
-			if (refl) {
-				::sprintf(buf1, "%s", refl->m_name.c_str());
-			}
-			else {
-				::sprintf(buf1, "TG %d", m_dstID);
-			}
-		}
-
-	std::string tmp(buf1);
-	return buf1;
-} */
 
 void CWiresX::sendConnectReply()
 {
@@ -2113,8 +2083,9 @@ void CWiresX::makePacket(CYSFNetwork* ysfNetwork, unsigned char *data, unsigned 
 
 	buffer[34U] = seqNo;
 	seqNo += 2U;
-	
-	ysfNetwork->write(buffer);
+
+	writeData(buffer);
+//	ysfNetwork->write(buffer);
 
 	fich.setFI(YSF_FI_COMMUNICATIONS);
 
@@ -2161,7 +2132,8 @@ void CWiresX::makePacket(CYSFNetwork* ysfNetwork, unsigned char *data, unsigned 
 		buffer[34U] = seqNo;
 		seqNo += 2U;
 		
-		ysfNetwork->write(buffer);
+	writeData(buffer);
+//		ysfNetwork->write(buffer);
 
 		fn++;
 		if (fn >= 8U) {
@@ -2181,7 +2153,8 @@ void CWiresX::makePacket(CYSFNetwork* ysfNetwork, unsigned char *data, unsigned 
 
 	buffer[34U] = seqNo | 0x01U;
 	
-	ysfNetwork->write(buffer);
+	writeData(buffer);
+//	ysfNetwork->write(buffer);
 }
 
 bool CWiresX::sendNetwork(void) {
