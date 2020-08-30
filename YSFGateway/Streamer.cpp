@@ -39,7 +39,7 @@ const unsigned char dt1_temp[] = {0x31, 0x22, 0x62, 0x5F, 0x29, 0x00, 0x00, 0x00
 const unsigned char dt2_temp[] = {0x00, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x1C, 0x20, 0x03, 0x08};
 unsigned char m_gps_buffer[20U];
 
-char std_ysf_radioid[] = {'H', '5', '0', '0', '0'};
+char std_ysf_radioid[] = {'*', '*', '*', '*', '*'};
 char ysf_radioid[5];
 
 CStreamer::CStreamer(CConf *conf) :
@@ -795,9 +795,16 @@ CYSFPayload ysfPayload;
 					} else strcpy(alien_user,"");
 
 					CYSFPayload payload;
+					
 					unsigned char dch[20U];
 					payload.readVDMode1Data(buffer+35U,dch);
-					memcpy(ysf_radioid,dch+5U,5U);
+					if (dch[5U] != 0) memcpy(ysf_radioid,dch+5U,5U);
+					else memcpy(ysf_radioid,std_ysf_radioid,5U);
+
+					//unsigned char tmp[6];
+					memcpy(tmp,ysf_radioid,5U);
+					tmp[5U]=0;
+					LogMessage("Radio ID: %s",tmp);
 
 					m_not_busy=false;
 					m_rcv_callsign = getSrcYSF_fromHeader(buffer);
@@ -828,6 +835,7 @@ CYSFPayload ysfPayload;
 						if (m_rcv_callsign.empty()) m_rcv_callsign= std::string("UNKNOW");
 						m_gid = fich.getDGId();
 						LogMessage("Late Entry from %s, gid=%d.",m_rcv_callsign.c_str(),m_gid);
+						memcpy(ysf_radioid,std_ysf_radioid,5U);
 						strcpy(alien_user,"");
 						m_not_busy=false;
 						m_conv.putDMRHeader();
@@ -918,12 +926,10 @@ CYSFPayload ysfPayload;
 
 void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 	static bool start_silence = false;
-	unsigned char dch[20U];
-	unsigned char csd1[20U], csd2[20U];
 	unsigned int fn;
-	CYSFPayload payload;
-	CYSFFICH fich;
 	unsigned int ysfFrameType;
+	std::string tmp_callsign = m_callsign;
+	tmp_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 
 	// YSF Playback 
 	if ((m_ysfWatch.elapsed() > YSF_FRAME_PER) && (m_open_channel || (m_beacon_status!=BE_OFF))) {
@@ -931,7 +937,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 		::memset(m_ysfFrame,0U,200U);
 		ysfFrameType = m_conv.getYSF(m_ysfFrame + 35U);
 		
-		if(ysfFrameType == TAG_HEADER || ysfFrameType == TAG_HEADERV1) {
+		if((ysfFrameType == TAG_HEADER) || (ysfFrameType == TAG_HEADERV1)) {
 			start_silence = true;
 			m_ysf_cnt = 0U;
 			silence_number=0;			
@@ -945,22 +951,26 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			CSync::addYSFSync(m_ysfFrame + 35U);
 
 			// Set the FICH
+			CYSFFICH fich;			
 			fich.setFI(YSF_FI_HEADER);
 			fich.setCS(2U);
-			fich.setCM(1U);
+			fich.setCM(0U);
 			fich.setBN(0U);
 			fich.setBT(0U);		
 			fich.setFN(0U);
 			fich.setFT(7U);
-			fich.setDev(0U);
-			fich.setMR(0U);
-			fich.setVoIP(false);			
+			// fich.setDev(0U);
+			// fich.setMR(0U);
+			// fich.setVoIP(false);			
 			if (ysfFrameType == TAG_HEADER) fich.setDT(YSF_DT_VD_MODE1);	
 			else fich.setDT(YSF_DT_VD_MODE2);	
 			fich.setDGId(m_gid);
 			//fich.setMR(2U);
 			fich.encode(m_ysfFrame + 35U);
 
+			unsigned char dch[20U];
+			unsigned char csd1[20U], csd2[20U];
+			CYSFPayload payload;
 			if (ysfFrameType == TAG_HEADER) {
 				memset(csd1, '*', YSF_CALLSIGN_LENGTH/2);
 				memcpy(csd1 + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);			
@@ -969,7 +979,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 				payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
 			} else {
 				memset(dch,'*',YSF_CALLSIGN_LENGTH);
-				memcpy(dch+YSF_CALLSIGN_LENGTH,m_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+				memcpy(dch+YSF_CALLSIGN_LENGTH,tmp_callsign.c_str(),YSF_CALLSIGN_LENGTH);
 				payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
 			}
 
@@ -985,26 +995,30 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
-			m_ysfFrame[34U] = (m_ysf_cnt & 0x7FU) <<1; // Net frame counter
+			m_ysfFrame[34U] = ((m_ysf_cnt & 0x7FU) <<1) | 0x01U; // Net frame counter
 
 			CSync::addYSFSync(m_ysfFrame + 35U);
 
 			// Set the FICH
+			CYSFFICH fich;
 			fich.setFI(YSF_FI_TERMINATOR);
 			fich.setCS(2U);
-			fich.setCM(1U);
+			fich.setCM(0U);
 			fich.setBN(0U);
 			fich.setBT(0U);						
 			fich.setFN(0U);
 			fich.setFT(7U);
-			fich.setDev(0U);
-			fich.setMR(0U);
-			fich.setVoIP(false);			
+			// fich.setDev(0U);
+			// fich.setMR(0U);
+			// fich.setVoIP(false);			
 			if (ysfFrameType == TAG_HEADER) fich.setDT(YSF_DT_VD_MODE1);	
 			else fich.setDT(YSF_DT_VD_MODE2);				
 			fich.setDGId(m_gid);
 			fich.encode(m_ysfFrame + 35U);
 
+			unsigned char dch[20U];
+			unsigned char csd1[20U], csd2[20U];
+			CYSFPayload payload;			
 			if (ysfFrameType == TAG_HEADER) {
 				memset(csd1, '*', YSF_CALLSIGN_LENGTH);
 				memcpy(csd1 + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);			
@@ -1013,7 +1027,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 				payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
 			} else {
 				memset(dch,'*',YSF_CALLSIGN_LENGTH);
-				memcpy(dch+YSF_CALLSIGN_LENGTH,m_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+				memcpy(dch+YSF_CALLSIGN_LENGTH,tmp_callsign.c_str(),YSF_CALLSIGN_LENGTH);
 				payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
 			}
 
@@ -1030,7 +1044,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			memcpy(ysf_radioid,std_ysf_radioid,5U);
 			m_conv.reset();	
 
-		} else if (ysfFrameType == TAG_DATA || ysfFrameType == TAG_DATAV1) {
+		} else if ((ysfFrameType == TAG_DATA) || (ysfFrameType == TAG_DATAV1)) {
 			fn = (m_ysf_cnt - 1U) % 8U;
 			
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
@@ -1040,20 +1054,21 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			// Add the YSF Sync
 			CSync::addYSFSync(m_ysfFrame + 35U);
-
+			CYSFPayload payload;
 			if (ysfFrameType == TAG_DATA) {
 					switch (fn) {
 						case 0:
 							// ***key
-							memset(dch, '*', YSF_CALLSIGN_LENGTH/2);
-							memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);				
+							unsigned char dch[20U];
+							memset(dch, '*', YSF_CALLSIGN_LENGTH);
+							//memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);				
 							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
 							break;
 						case 1:
 							//Callsign
 							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_rcv_callsign.c_str());
 							break;
-						case 5:
+						case 5:					
 							memset(dch, ' ', YSF_CALLSIGN_LENGTH/2);
 							memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);
 							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
@@ -1075,21 +1090,23 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)"          ");
 					}
 			} else {
+					unsigned char dch[20U];
 					m_wiresX->getMode1DCH(dch,fn);
 					payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
 			}
 
 			// Set the FICH
+			CYSFFICH fich;			
 			fich.setFI(YSF_FI_COMMUNICATIONS);
 			fich.setCS(2U);
-			fich.setCM(1U);
+			fich.setCM(0U);
 			fich.setBN(0U);
 			fich.setBT(0U);								
 			fich.setFN(fn);
 			fich.setFT(7U);
-			fich.setDev(0U);
-			fich.setMR(0U);
-			fich.setVoIP(false);			
+			// fich.setDev(0U);
+			// fich.setMR(0U);
+			// fich.setVoIP(false);			
 			if (ysfFrameType == TAG_HEADER) fich.setDT(YSF_DT_VD_MODE1);	
 			else fich.setDT(YSF_DT_VD_MODE2);		
 			//fich.setMR(YSF_MR_BUSY);
@@ -1387,7 +1404,7 @@ static bool sending_silence=false;
 				rx_dmrdata.setBER(0U);
 				rx_dmrdata.setRSSI(0U);
 				rx_dmrdata.setDataType(DT_VOICE_LC_HEADER);
-				memcpy(ysf_radioid,std_ysf_radioid,5U);
+//				memcpy(ysf_radioid,std_ysf_radioid,5U);
 
 				// Add sync
 				CSync::addDMRDataSync(m_dmrFrame, 0);
@@ -1580,16 +1597,22 @@ unsigned int CStreamer::findYSFID(std::string cs, bool showdst)
 }
 
 std::string CStreamer::getSrcYSF_fromHeader(const unsigned char* buffer) {
-	unsigned char cbuffer[155U];
-	CYSFPayload ysfPayload;
+//	unsigned char cbuffer[155U];
+//	CYSFPayload ysfPayload;
 	std::string rcv_callsign;
 	char tmp[11U];
-	
-	::memcpy(cbuffer,buffer,155U);
-	ysfPayload.processHeaderData(cbuffer + 35U);
-	rcv_callsign=ysfPayload.getSource();
+
+	CYSFPayload payload;
+	unsigned char dch[20U];
+	payload.readVDMode1Data(buffer+35U,dch);
+	memcpy(tmp,dch+10,10);
+	tmp[10U]=0;
+	rcv_callsign = std::string(tmp);
+	// ::memcpy(cbuffer,buffer,155U);
+	// ysfPayload.processHeaderData(cbuffer + 35U);
+	// rcv_callsign=ysfPayload.getSource();
 	if (rcv_callsign.empty() || (!containsOnlyASCII(rcv_callsign))) {
-		::memcpy(tmp,cbuffer+14U,10U);
+		::memcpy(tmp,(char *)(buffer+14U),10U);
 		tmp[10U]=0;
 		rcv_callsign = std::string(tmp);
 	}
@@ -1772,6 +1795,7 @@ void CStreamer::SendDummyDMR(unsigned int srcid,unsigned int dstid, FLCO dmr_flc
 	// Send DMR TermLC
 	m_dmrNetwork->write(dmrdata);
 	m_unlinkReceived = false;
+	m_dmrinfo = false;
 }
 
 unsigned char ysfFrame[155U];

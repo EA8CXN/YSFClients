@@ -462,7 +462,7 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 			//callsign
 			::memcpy((char*)(data+22U),tmp_buffer+16U,10U);
 			//date
-			::memcpy((char*)(data+32U),tmp_buffer+44U,12U);
+			::memcpy((char*)(data+31U),tmp_buffer+44U,12U);
 			//gps
 			::memcpy((char*)(data+44U),tmp_buffer+66U,18U);
 			//text
