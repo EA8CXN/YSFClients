@@ -824,6 +824,9 @@ CYSFPayload ysfPayload;
 				} else if (fi==YSF_FI_COMMUNICATIONS) {
 					// Test if late entry
 					if (m_open_channel==false) {
+						m_rcv_callsign=getSrcYSF_fromData(buffer);
+
+
 						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
 						else {
 							::memcpy(m_gps_buffer, dt1_temp, 10U);
@@ -831,8 +834,8 @@ CYSFPayload ysfPayload;
 						}
 						// tmp_str = getSrcYSF(buffer);
 						// if (!containsOnlyASCII(tmp_str)) return;
-						m_rcv_callsign=getSrcYSF_fromData(buffer);
-						if (m_rcv_callsign.empty()) m_rcv_callsign= std::string("UNKNOW");
+						// m_rcv_callsign=getSrcYSF_fromData(buffer);
+						// if (m_rcv_callsign.empty()) m_rcv_callsign= std::string("UNKNOW");
 						m_gid = fich.getDGId();
 						LogMessage("Late Entry from %s, gid=%d.",m_rcv_callsign.c_str(),m_gid);
 						memcpy(ysf_radioid,std_ysf_radioid,5U);
@@ -843,12 +846,12 @@ CYSFPayload ysfPayload;
 						m_open_channel=true;						
 					}
 
-					//tmp_str = getSrcYSF_fromData(buffer);
-					if (strcmp(alien_user,m_rcv_callsign.c_str()) == 0) {
+					tmp_str = getSrcYSF_fromData(buffer);
+					if (strcmp(alien_user,tmp_str.c_str()) == 0) {
 						LogMessage("Voice Packet from alien user %s. Rejecting..",alien_user);
 						return;
 					}
-
+					m_rcv_callsign = getSrcYSF_fromData(buffer);					
 					// Update gps info for ft=6
 					silence_number = 0;
 					if ((ft==6) && (fn==6)) {
@@ -866,7 +869,6 @@ CYSFPayload ysfPayload;
 							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
 						}						
 					}
-					//m_rcv_callsign = getSrcYSF_fromData(buffer);
 					// Update gps info for ft=7
 					if ((ft==7) && ((fn==6) || (fn==7))) {
 						if (fn==6) {
@@ -954,7 +956,8 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			CYSFFICH fich;			
 			fich.setFI(YSF_FI_HEADER);
 			fich.setCS(2U);
-			fich.setCM(0U);
+			if (ysf_radioid[0] != '*') fich.setCM(1U);
+			else fich.setCM(0U);
 			fich.setBN(0U);
 			fich.setBT(0U);		
 			fich.setFN(0U);
@@ -1003,7 +1006,8 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			CYSFFICH fich;
 			fich.setFI(YSF_FI_TERMINATOR);
 			fich.setCS(2U);
-			fich.setCM(0U);
+			if (ysf_radioid[0] != '*') fich.setCM(1U);
+			else fich.setCM(0U);
 			fich.setBN(0U);
 			fich.setBT(0U);						
 			fich.setFN(0U);
@@ -1061,7 +1065,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 							// ***key
 							unsigned char dch[20U];
 							memset(dch, '*', YSF_CALLSIGN_LENGTH);
-							//memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);				
+							memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);				
 							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
 							break;
 						case 1:
@@ -1069,9 +1073,11 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_rcv_callsign.c_str());
 							break;
 						case 5:					
-							memset(dch, ' ', YSF_CALLSIGN_LENGTH/2);
-							memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);
-							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
+							if (ysf_radioid[0] != '*') {
+								memset(dch, ' ', YSF_CALLSIGN_LENGTH/2);
+								memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);
+								payload.writeVDMode2Data(m_ysfFrame + 35U, dch);							
+							} else payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)"          ");
 							break;									
 						case 6:
 							if ((m_tg_type == DMR) && (m_beacon_status == BE_OFF)) {
@@ -1099,7 +1105,8 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			CYSFFICH fich;			
 			fich.setFI(YSF_FI_COMMUNICATIONS);
 			fich.setCS(2U);
-			fich.setCM(0U);
+			if (ysf_radioid[0] != '*') fich.setCM(1U);
+			else fich.setCM(0U);
 			fich.setBN(0U);
 			fich.setBT(0U);								
 			fich.setFN(fn);

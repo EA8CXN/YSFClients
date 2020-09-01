@@ -30,6 +30,7 @@
 
 // 00 22 62 5F 20 00 00 00 00 00 
 // 00 00 00 00 6C 20 1C 20 03 CE 
+//31 22 62 5F 29 54 50 52 53 55 52 79 48 4A 6C 20  1C 20 03 03 
 
 // DT1 and DT2, suggested by Manuel EA7EE
 // Changed to code 0x20 -> YSF2DMR signature, sequence number, info and CRC not used
