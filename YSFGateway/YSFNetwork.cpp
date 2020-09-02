@@ -235,6 +235,12 @@ bool CYSFNetwork::connected() {
 	return m_linked;
 }
 
+void CYSFNetwork::id_query_response() {
+	m_id_response = false;
+
+	if (m_linked) m_socket.write(m_getid, 4U, m_address, m_port);
+}
+
 bool CYSFNetwork::id_getresponse() {
 	return m_id_response;
 }

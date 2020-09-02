@@ -50,6 +50,7 @@ public:
 	unsigned int getRoomID();
 	bool connected();
 	bool id_getresponse();
+	void id_query_response();
 	void close();
 
 private:

@@ -35,6 +35,8 @@
 #include <cstring>
 #include <cctype>
 
+//#define ANALYZER
+
 const unsigned char DX_REQ[]    = {0x5DU, 0x71U, 0x5FU};
 const unsigned char CONN_REQ[]  = {0x5DU, 0x23U, 0x5FU};
 const unsigned char DISC_REQ[]  = {0x5DU, 0x2AU, 0x5FU};
@@ -357,10 +359,11 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 		m_source = tmp;
 		m_sendNetwork = true;
 
-		// CUtils::dump(" Wires-X command", m_command, cmd_len);
-		// m_sendNetwork = false;
-		// return WXS_NONE;
-		
+#ifdef ANALYZER
+		CUtils::dump(" Wires-X command", m_command, cmd_len);
+		m_sendNetwork = false;
+		return WXS_NONE;
+#endif		
 		if (::memcmp(m_command + 1U, DX_REQ, 3U) == 0) {
 			m_sendNetwork = false;
 			//CUtils::dump("DX Command", m_command, cmd_len);
@@ -1298,12 +1301,14 @@ void CWiresX::sendDisconnectReply()
 
 void CWiresX::sendAllReply()
 {
+	unsigned char data[1100U];
+
 	if (m_start == 0U)
 		m_reflectors->reload();
 
 	std::vector<CReflector*>& curr = m_reflectors->current();
 
-	unsigned char data[1100U];
+
 	::memset(data, 0x00U, 1100U);
 
 	data[0U] = m_seqNo;

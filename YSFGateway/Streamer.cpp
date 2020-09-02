@@ -118,8 +118,9 @@ CStreamer::~CStreamer() {
 	delete[] m_dmrFrame;
 }
 
-void CStreamer::setBeacon(std::string file, CTimer *inactivityTimer, CTimer *lost_timer, bool NoChange, unsigned int dgid) {
+void CStreamer::setBeacon(CTimer *inactivityTimer, CTimer *lost_timer, bool NoChange, unsigned int dgid) {
 
+    std::string file = m_conf->getBeaconPath();
     m_inactivityTimer = inactivityTimer;
     m_lostTimer = lost_timer;
 
@@ -273,6 +274,7 @@ void CStreamer::BeaconLogic(void) {
 			m_bea_voice_Watch.start();
 			m_beacon_Watch.start();
 			first_time_b = false;
+			m_gid = 0;
 		}
 		
 		// Beacon Logic
@@ -671,7 +673,10 @@ char *CStreamer::get_radio(char c) {
 		break;
 	case 0x15U:
 		::strcpy(radio, "YSF2DMR");
-		break;					
+		break;	
+	case 0x20U:
+		::strcpy(radio, "DX-R2");
+		break;							
 	case 0x24U:
 		::strcpy(radio, "FT-1D");
 		break;

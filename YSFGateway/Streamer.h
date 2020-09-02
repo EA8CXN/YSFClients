@@ -79,7 +79,7 @@ public:
 	~CStreamer();
 
 	void createGPS(std::string callsign);
-    void setBeacon(std::string file, CTimer *inactivityTimer, CTimer *lost_timer, bool NoChange, unsigned int dgid);
+    void setBeacon(CTimer *inactivityTimer, CTimer *lost_timer, bool NoChange, unsigned int dgid);
     void AMBE_write(unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);
     void Init(CYSFNetwork *modemNetwork, CYSFNetwork* ysfNetwork, CFCSNetwork* fcsNetwork,CDMRNetwork *dmrNetwork,CReflectors*m_dmrReflectors);
     void clock(TG_STATUS m_TG_connect_state, unsigned int ms);

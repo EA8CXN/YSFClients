@@ -417,7 +417,7 @@ int CYSFGateway::run()
 	}
 
 	m_Streamer->createGPS(m_callsign);
-	m_Streamer->setBeacon(m_conf.getBeaconPath(),m_inactivityTimer,&m_lostTimer, m_NoChange, m_DGID);
+	m_Streamer->setBeacon(m_inactivityTimer,&m_lostTimer, m_NoChange, m_DGID);
 	m_wiresX = m_Streamer->createWiresX(&rptNetwork, m_conf.getWiresXMakeUpper(), m_callsign, m_conf.getLocation());	 	
 	m_Streamer->Init(&rptNetwork, m_ysfNetwork, m_fcsNetwork, m_dmrNetwork, m_dmrReflectors);
 
@@ -525,6 +525,8 @@ int CYSFGateway::run()
 					startupReLinking();
 					m_lostTimer.start();
 				} 
+				if (m_TG_connect_state == TG_DISABLE) m_TG_connect_state = TG_NONE;
+				m_ysfNetwork->id_query_response();
 				first_time_ysf_dgid = true;
 				m_dgid_timer.start();
 				m_inactivityTimer->start();
@@ -730,7 +732,7 @@ bool CYSFGateway::startupLinking()
 	} else {
 		if ((m_tg_type == DMR)) { // && m_ysf_callsign.empty()) {
 			m_wiresX->setReflectors(m_dmrReflectors);				
-			reflector = m_actual_ref->findById(std::to_string(m_Streamer->get_dstid()));
+			reflector = m_dmrReflectors->findById(std::to_string(m_Streamer->get_dstid()));
 			if (reflector != NULL) {
 				m_wiresX->setReflector(reflector, m_Streamer->get_dstid());
 				m_current = reflector->m_name;
@@ -760,6 +762,7 @@ bool CYSFGateway::startupLinking()
 }
 
 bool CYSFGateway::TG_Connect(unsigned int dstID) {
+	char tmp[20];
 	CReflector* reflector;
 	std::string dst_str_ID = std::to_string(dstID);
     TG_TYPE last_type=m_tg_type;
@@ -879,11 +882,12 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 		case FCS:		
 			if (m_fcsNetwork != NULL) {
 				m_lostTimer.stop();				
-
+				//LogMessage("Conecting to FCS  %s.",dst_str_ID.c_str());
 				reflector = m_fcsReflectors->findById(dst_str_ID);
 				if (reflector != NULL) {
-					
-					bool ok = m_fcsNetwork->writeLink("FCS00" + reflector->m_id);
+					sprintf(tmp,"FCS%05d",atoi(reflector->m_id.c_str()));
+					//LogMessage("Conecting FCS to %s.",tmp);					
+					bool ok = m_fcsNetwork->writeLink(std::string(tmp));
 					if (ok) {
 						//LogMessage("Automatic (re-)connection to %s", reflector->m_name.c_str());
 
@@ -1377,7 +1381,7 @@ unsigned int tmp_srcid;
 					break;
 			}
 
-			if ((m_TG_connect_state != TG_NONE) && (m_TG_connect_state != TG_DISABLE) && (m_TGChange.elapsed() > 12000U)) {
+			if ((m_TG_connect_state != TG_NONE) && (m_TG_connect_state != TG_DISABLE) && (m_TGChange.elapsed() > 30000U)) {
 				LogMessage("Timeout changing TG");
 				m_TG_connect_state = TG_NONE;
 				m_wiresX->SendCReply();				

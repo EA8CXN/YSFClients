@@ -129,8 +129,8 @@ bool CReflectors::load()
 					strcpy(tmp1,p1+3);
 					tmp=atoi(tmp1);
 					refl->m_id = std::to_string(tmp);
-					//LogMessage("ID: %s",refl->m_id.c_str());
-					//LogMessage("Name: %s",p2);
+					// LogMessage("ID: %s",refl->m_id.c_str());
+					// LogMessage("Name: %s",p2);
 					
 					refl->m_name    = std::string(p2);
 					refl->m_desc    = std::string(p3);
@@ -348,6 +348,7 @@ void CReflectors::clock(unsigned int ms)
 
 	if (m_timer.isRunning() && m_timer.hasExpired()) {
 		load();
+		reload();
 		m_timer.start();
 	}
 }
