@@ -384,6 +384,8 @@ void CYSFPayload::writeVDMode1Data(unsigned char* data, const unsigned char* dt)
 void CYSFPayload::writeVDMode2Data(unsigned char* data, const unsigned char* dt)
 {
 	data += YSF_SYNC_LENGTH_BYTES + YSF_FICH_LENGTH_BYTES;
+
+	//CUtils::dump(1U,"VDMode2 BUffer",dt,10U);
 	
 	unsigned char dt_tmp[13];
 	::memcpy(dt_tmp, dt, YSF_CALLSIGN_LENGTH);

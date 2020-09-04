@@ -159,7 +159,8 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 	case 0x25U:
 	case 0x29U:
 	case 0x2AU:
-	case 0x31U:			
+	case 0x2DU: 	
+	case 0x31U:	
 		symbol = '>';
 		strcpy(suffix, "-9");		
 		break;
@@ -167,10 +168,6 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 		symbol = 'r';
 		strcpy(suffix, "-1");		
 		break;
-	case 0x27U:
-		symbol = '-';
-		strcpy(suffix, "-2");
-		break;			
 	default:
 		symbol = '-';
 		strcpy(suffix, "-2");		

@@ -90,6 +90,7 @@ m_networkDebug(false),
 m_networkNoChange(false),
 m_NetworkReloadTime(0U),
 m_ysfNetworkEnabled(false),
+m_ysfNetworkOptions(""),
 m_ysfNetworkPort(0U),
 m_ysfNetworkHosts(),
 m_ysfNetworkParrotAddress("127.0.0.1"),
@@ -105,6 +106,7 @@ m_p25NetworkFile(),
 m_fcsNetworkEnabled(false),
 m_fcsNetworkFile(),
 m_fcsNetworkPort(0U),
+m_fcsNetworkOptions(""),
 m_dmrNetworkEnabled(false),
 m_dmrStartup(),
 m_dmrNetworkFile(),
@@ -298,7 +300,9 @@ bool CConf::read()
 		if (::strcmp(key, "Enable") == 0)
 			m_ysfNetworkEnabled = ::atoi(value) == 1;
 		else if (::strcmp(key, "Startup") == 0)
-			m_ysfStartup = (unsigned int)::atoi(value);		
+			m_ysfStartup = (unsigned int)::atoi(value);	
+		else if (::strcmp(key, "Options") == 0)
+			m_ysfNetworkOptions = value;				
 		else if (::strcmp(key, "StartupDGID") == 0)
 			m_ysfDGID = (unsigned int)::atoi(value);					
 		else if (::strcmp(key, "Port") == 0)
@@ -333,7 +337,9 @@ bool CConf::read()
 		if (::strcmp(key, "Enable") == 0)
 			m_fcsNetworkEnabled = ::atoi(value) == 1;
 		else if (::strcmp(key, "Startup") == 0)
-			m_fcsStartup = (unsigned int)::atoi(value);				
+			m_fcsStartup = (unsigned int)::atoi(value);
+		else if (::strcmp(key, "Options") == 0)
+			m_ysfNetworkOptions = value;							
 		else if (::strcmp(key, "Rooms") == 0)
 			m_fcsNetworkFile = value;
 		else if (::strcmp(key, "Port") == 0)
@@ -837,3 +843,12 @@ unsigned int CConf::getStartupDGID() const
 	return m_ysfDGID;
 }
 
+std::string CConf::getYSFNetworkOptions() const
+{
+	return m_ysfNetworkOptions;
+}
+
+std::string CConf::getFCSNetworkOptions() const
+{
+	return m_fcsNetworkOptions;
+}

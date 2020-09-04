@@ -47,6 +47,8 @@ public:
 
 	bool writeLink(const std::string& reflector);
 
+	void setOptions(const std::string& options);	
+
 	void writeUnlink(unsigned int count = 1U);
 
 	unsigned int read(unsigned char* data);
@@ -60,8 +62,10 @@ private:
 	bool                           m_debug;
 	in_addr                        m_address;
 	unsigned char*                 m_ping;
+	unsigned char*                 m_options;	
 	unsigned char*                 m_info;
 	std::string                    m_reflector;
+	std::string                    m_opt;	
 	std::string                    m_print;
 	CRingBuffer<unsigned char>     m_buffer;
 	std::map<std::string, in_addr> m_addresses;
@@ -72,6 +76,7 @@ private:
 
 	void writeInfo();
 	void writePing();
+	void writeOptions();	
 };
 
 #endif

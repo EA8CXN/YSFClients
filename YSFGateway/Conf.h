@@ -85,12 +85,13 @@ public:
   unsigned int getNetworkInactivityTimeout() const;
   bool         getNetworkRevert() const;
   bool         getNetworkDebug() const;
-  bool 		   getNetworkNoChange() const;
+  bool 		     getNetworkNoChange() const;
   unsigned int getNetworkReloadTime() const;  
 
   // The YSF Network section
   bool         getYSFNetworkEnabled() const;
   unsigned int getYSFStartup() const;  
+  std::string  getYSFNetworkOptions() const;
   unsigned int getYSFNetworkPort() const;
   std::string  getYSFNetworkHosts() const;
   std::string  getYSFNetworkParrotAddress() const;
@@ -112,6 +113,7 @@ public:
   // The FCS Network section
   bool         getFCSNetworkEnabled() const;
   unsigned int getFCSStartup() const;  
+  std::string  getFCSNetworkOptions() const;
   std::string  getFCSNetworkFile() const;
   unsigned int getFCSNetworkPort() const;
   
@@ -200,6 +202,7 @@ private:
 
   bool         m_ysfNetworkEnabled;
   unsigned int m_ysfStartup; 
+  std::string  m_ysfNetworkOptions;
   unsigned int m_ysfNetworkPort;
   std::string  m_ysfNetworkHosts;
   std::string  m_ysfNetworkParrotAddress;
@@ -217,9 +220,10 @@ private:
   
   bool         m_fcsNetworkEnabled;
   unsigned int m_fcsStartup;
+
   std::string  m_fcsNetworkFile;
   unsigned int m_fcsNetworkPort;
-
+  std::string  m_fcsNetworkOptions;
   bool         m_dmrNetworkEnabled;  
   unsigned int m_dmrStartup;
   std::string  m_dmrNetworkFile;

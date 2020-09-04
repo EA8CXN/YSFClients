@@ -173,6 +173,8 @@ private:
     void DMR_send_Network(void);
     std::string getSrcYSF_fromData(const unsigned char* buffer);
     std::string getSrcYSF_fromHeader(const unsigned char* buffer);
+    std::string getSrcYSF_fromFN1(const unsigned char* buffer);
+    std::string getSrcYSF_fromModem(const unsigned char* buffer);    
     unsigned int findYSFID(std::string cs, bool showdst);
     void processDTMF(unsigned char* buffer, unsigned char dt);
     void processWiresX(const unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);

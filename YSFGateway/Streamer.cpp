@@ -673,7 +673,10 @@ char *CStreamer::get_radio(char c) {
 		break;
 	case 0x15U:
 		::strcpy(radio, "YSF2DMR");
-		break;	
+		break;
+	case 0x16U:
+		::strcpy(radio, "IPCS2");
+		break;		
 	case 0x20U:
 		::strcpy(radio, "DX-R2");
 		break;							
@@ -700,6 +703,9 @@ char *CStreamer::get_radio(char c) {
 		break;		
 	case 0x2BU: 
 		::strcpy(radio, "FT-70");
+		break;
+	case 0x2DU: 
+		::strcpy(radio, "FTM-3207");
 		break;
 	case 0x2EU:  
 		::strcpy(radio, "FTM-7250");
@@ -785,7 +791,8 @@ CYSFPayload ysfPayload;
 			} else if (dt==YSF_DT_VD_MODE2) {
 
 				if (fi==YSF_FI_HEADER) {
-
+					CYSFPayload payload;
+					
 					if (m_open_channel && (!beacon_running)) {
 						tmp_str = getSrcYSF_fromHeader(buffer);
 						if (strcmp(tmp_str.c_str(),m_rcv_callsign.c_str())!=0) {
@@ -799,22 +806,15 @@ CYSFPayload ysfPayload;
 						}
 					} else strcpy(alien_user,"");
 
-					CYSFPayload payload;
 					
 					unsigned char dch[20U];
-					payload.readVDMode1Data(buffer+35U,dch);
-					if (dch[5U] != 0) memcpy(ysf_radioid,dch+5U,5U);
+					if (payload.readVDMode1Data(buffer+35U,dch)) memcpy(ysf_radioid,dch+5U,5U);
 					else memcpy(ysf_radioid,std_ysf_radioid,5U);
-
-					//unsigned char tmp[6];
 					memcpy(tmp,ysf_radioid,5U);
 					tmp[5U]=0;
 					LogMessage("Radio ID: %s",tmp);
-
 					m_not_busy=false;
 					m_rcv_callsign = getSrcYSF_fromHeader(buffer);
-					//if (!containsOnlyASCII(tmp_str)) return;
-					//m_rcv_callsign=tmp_str;
 					m_gid = fich.getDGId();					
 					LogMessage("Received voice data *%s* from *%s*, gid=%d.",m_rcv_callsign.c_str(),m_netDst.c_str(),m_gid);
 					if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
@@ -829,18 +829,13 @@ CYSFPayload ysfPayload;
 				} else if (fi==YSF_FI_COMMUNICATIONS) {
 					// Test if late entry
 					if (m_open_channel==false) {
-						m_rcv_callsign=getSrcYSF_fromData(buffer);
-
-
+						if (m_tg_type == FCS) { if (fn==1) m_rcv_callsign=getSrcYSF_fromFN1(buffer);}
+						else m_rcv_callsign = getSrcYSF_fromData(buffer);
 						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
 						else {
 							::memcpy(m_gps_buffer, dt1_temp, 10U);
 							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
 						}
-						// tmp_str = getSrcYSF(buffer);
-						// if (!containsOnlyASCII(tmp_str)) return;
-						// m_rcv_callsign=getSrcYSF_fromData(buffer);
-						// if (m_rcv_callsign.empty()) m_rcv_callsign= std::string("UNKNOW");
 						m_gid = fich.getDGId();
 						LogMessage("Late Entry from %s, gid=%d.",m_rcv_callsign.c_str(),m_gid);
 						memcpy(ysf_radioid,std_ysf_radioid,5U);
@@ -851,12 +846,16 @@ CYSFPayload ysfPayload;
 						m_open_channel=true;						
 					}
 
-					tmp_str = getSrcYSF_fromData(buffer);
-					if (strcmp(alien_user,tmp_str.c_str()) == 0) {
-						LogMessage("Voice Packet from alien user %s. Rejecting..",alien_user);
-						return;
+					if (m_tg_type == YSF) {
+						tmp_str = getSrcYSF_fromData(buffer);
+						if (strcmp(alien_user,tmp_str.c_str()) == 0) {
+							LogMessage("Voice Packet from alien user %s. Rejecting..",alien_user);
+							return;
+						}
 					}
-					m_rcv_callsign = getSrcYSF_fromData(buffer);					
+					
+					if (m_tg_type == FCS) { if (fn==1) m_rcv_callsign=getSrcYSF_fromFN1(buffer);}
+					else m_rcv_callsign = getSrcYSF_fromData(buffer); 			
 					// Update gps info for ft=6
 					silence_number = 0;
 					if ((ft==6) && (fn==6)) {
@@ -913,7 +912,7 @@ CYSFPayload ysfPayload;
 					// m_open_channel=true;
 
 				} else if (fi==YSF_FI_TERMINATOR) {
-					tmp_str = getSrcYSF_fromData(buffer);
+					tmp_str = getSrcYSF_fromHeader(buffer);
 					if (strcmp(alien_user,tmp_str.c_str()) == 0) {
 						LogMessage("EOT Packet from alien user %s. Rejecting..",alien_user);
 						return;
@@ -991,7 +990,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 				payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
 			}
 
-			LogMessage("Header Playback");
+		//	LogMessage("Header Playback");
 			rptNetwork->write(m_ysfFrame);
 
 			m_ysf_cnt++;
@@ -1040,7 +1039,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 				payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
 			}
 
-			LogMessage("EOT Playback");
+		//	LogMessage("EOT Playback");
 			rptNetwork->write(m_ysfFrame);
 
 			m_open_channel=false;
@@ -1609,53 +1608,125 @@ unsigned int CStreamer::findYSFID(std::string cs, bool showdst)
 }
 
 std::string CStreamer::getSrcYSF_fromHeader(const unsigned char* buffer) {
-//	unsigned char cbuffer[155U];
-//	CYSFPayload ysfPayload;
-	std::string rcv_callsign;
+	std::string rcv_callsign("");
+	unsigned char dch[20U];	
 	char tmp[11U];
+	unsigned int ret;
+	CYSFPayload ysfPayload;
 
-	CYSFPayload payload;
-	unsigned char dch[20U];
-	payload.readVDMode1Data(buffer+35U,dch);
-	memcpy(tmp,dch+10,10);
-	tmp[10U]=0;
-	rcv_callsign = std::string(tmp);
-	// ::memcpy(cbuffer,buffer,155U);
-	// ysfPayload.processHeaderData(cbuffer + 35U);
-	// rcv_callsign=ysfPayload.getSource();
-	if (rcv_callsign.empty() || (!containsOnlyASCII(rcv_callsign))) {
-		::memcpy(tmp,(char *)(buffer+14U),10U);
+	ret = ysfPayload.readDataFRModeData2(buffer + 35U,dch);
+	if (ret) {
+		memcpy(tmp,dch,10U);
+		tmp[10U] = 0;
+		rcv_callsign = std::string(tmp);
+	}
+	if ((dch[0] == 0x20) && (m_tg_type == YSF)) {
+		memcpy(tmp,buffer+14U,10U);
 		tmp[10U]=0;
 		rcv_callsign = std::string(tmp);
 	}
+	
 	strcpy(tmp,rcv_callsign.c_str());
-//	LogMessage("Antes: %s",tmp);
+	// LogMessage("Antes: %s",tmp);
 	unsigned int i=0;
 	while (i<strlen(tmp) && isalnum(tmp[i])) {
 		i++;
 	}
-	tmp[i]=0U;
+	i--;
+	while ((i>0) && isdigit(tmp[i])) {
+		i--;
+	}
+	tmp[i+1]=0U;
 	rcv_callsign = std::string(tmp);
+	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");	
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
-//	LogMessage("Despues: %s",tmp);	
+	// LogMessage("Despues: %s",tmp);	
+	// LogMessage("Get from header: %s",rcv_callsign.c_str());	
 	return rcv_callsign;
 }
 
-std::string CStreamer::getSrcYSF_fromData(const unsigned char* buffer) {
-	std::string rcv_callsign;
+std::string CStreamer::getSrcYSF_fromModem(const unsigned char* buffer) {
+	std::string rcv_callsign("");
 	char tmp[11U];
 
 	::memcpy(tmp,buffer+14U,10U);
 	tmp[10U]=0;
 	rcv_callsign = std::string(tmp);
 	strcpy(tmp,rcv_callsign.c_str());
+//		LogMessage("Get from Data: %s",tmp);		
 //	LogMessage("Antes: %s",tmp);
 	unsigned int i=0;
 	while (i<strlen(tmp) && isalnum(tmp[i])) {
 		i++;
 	}
-	tmp[i]=0U;
+	i--;
+	while ((i>0) && isdigit(tmp[i])) {
+		i--;
+	}
+	tmp[i+1]=0U;		
 	rcv_callsign = std::string(tmp);
+	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
+	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+//	LogMessage("Despues: %s",tmp);	
+	return rcv_callsign;
+}
+
+std::string CStreamer::getSrcYSF_fromData(const unsigned char* buffer) {
+	std::string rcv_callsign("");
+	char tmp[11U];
+
+	if (m_tg_type == YSF) {
+		::memcpy(tmp,buffer+14U,10U);
+		tmp[10U]=0;
+		rcv_callsign = std::string(tmp);
+		strcpy(tmp,rcv_callsign.c_str());
+//		LogMessage("Get from Data: %s",tmp);		
+	//	LogMessage("Antes: %s",tmp);
+		unsigned int i=0;
+		while (i<strlen(tmp) && isalnum(tmp[i])) {
+			i++;
+		}
+		i--;
+		while ((i>0) && isdigit(tmp[i])) {
+			i--;
+		}
+		tmp[i+1]=0U;		
+		rcv_callsign = std::string(tmp);
+	}
+	if (rcv_callsign.empty()) rcv_callsign = m_rcv_callsign;
+	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
+	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+//	LogMessage("Despues: %s",tmp);	
+	return rcv_callsign;
+}
+
+std::string CStreamer::getSrcYSF_fromFN1(const unsigned char* buffer) {	
+	std::string rcv_callsign("");
+	char tmp[11U];
+	unsigned int ret;
+	CYSFPayload ysfPayload;
+	unsigned char dch[20U];
+
+	ret = ysfPayload.readVDMode2Data(buffer + 35U,dch);
+	if (ret) {
+		memcpy(tmp,dch,10U);
+		tmp[10U]=0;
+		rcv_callsign = std::string(tmp);
+		strcpy(tmp,rcv_callsign.c_str());
+//		LogMessage("Get from FN1: %s",tmp);
+		unsigned int i=0;
+		while (i<strlen(tmp) && isalnum(tmp[i])) {
+			i++;
+		}
+		i--;
+		while ((i>0) && isdigit(tmp[i])) {
+			i--;
+		}
+		tmp[i+1]=0U;
+		rcv_callsign = std::string(tmp);
+	}
+	if (rcv_callsign.empty()) rcv_callsign = m_rcv_callsign;
+	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 //	LogMessage("Despues: %s",tmp);	
 	return rcv_callsign;
@@ -1668,7 +1739,7 @@ void CStreamer::processWiresX(const unsigned char* buffer, unsigned char fi, uns
 	WX_STATUS status = m_wiresX->process(buffer + 35U, buffer + 14U, fi, dt, fn, ft, bn, bt);
 	switch (status) {		
 		case WXS_CONNECT: {			
-			m_ysf_callsign = getSrcYSF_fromData(buffer);
+			m_ysf_callsign = getSrcYSF_fromModem(buffer);
 			LogMessage("Callsign connect: %s",m_ysf_callsign.c_str());
 			m_srcid = findYSFID(m_ysf_callsign, true);
 			m_dstid = m_wiresX->getDstID(); 
@@ -1704,7 +1775,7 @@ void CStreamer::processDTMF(unsigned char* buffer, unsigned char dt)
 
 	switch (status) {
 	case WXS_CONNECT: {
-			m_ysf_callsign = getSrcYSF_fromData(buffer);
+			m_ysf_callsign = getSrcYSF_fromModem(buffer);
 			m_srcid = findYSFID(m_ysf_callsign, true);			
 			std::string id = m_dtmf->getReflector();
 			m_dstid = atoi(id.c_str());

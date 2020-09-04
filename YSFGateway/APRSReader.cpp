@@ -346,9 +346,10 @@ int lat, lon;
 	m_gps_buffer_cnt++;
 	CrcGPS(buffer);
 
-	if (callsign.compare(std::string("PARROT")) == 0) return;
-	if (callsign.compare(std::string("LOCAL")) == 0) return;
-	if (callsign.compare(std::string("UNLINK")) == 0) return;	
+	if (callsign.compare(std::string("UNKNOW    ")) == 0) return;
+	if (callsign.compare(std::string("PARROT    ")) == 0) return;
+	if (callsign.compare(std::string("LOCAL     ")) == 0) return;
+	if (callsign.compare(std::string("UNLINK    ")) == 0) return;	
 
 	if (!callsign.empty()) 
 		if (findCall(callsign, &lat, &lon)) 

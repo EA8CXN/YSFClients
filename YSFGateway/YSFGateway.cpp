@@ -272,12 +272,11 @@ int CYSFGateway::run()
 	m_last_NXDN_TG = m_conf.getNXDNStartup();
 	m_last_P25_TG = m_conf.getP25Startup();
 	m_DGID = m_conf.getStartupDGID();
-	m_dmr_closed = false;
-	m_fcs_closed = false;	
-	m_ysf_closed = false;
 	
 	m_tg_type = (enum TG_TYPE) m_conf.getNetworkTypeStartup();
 	m_Streamer->put_tgType(m_tg_type);
+	m_ysfoptions = m_conf.getYSFNetworkOptions();
+	m_fcsoptions = m_conf.getFCSNetworkOptions();
 
 	LogInfo("General Parameters");
 	//unsigned int m_original = atoi(m_startup.c_str());
@@ -297,8 +296,10 @@ int CYSFGateway::run()
 	LogInfo("    FCS Startup: %d", m_last_FCS_TG);
 	LogInfo("    DMR Startup: %d", m_last_DMR_TG);
 	LogInfo("    NXDN Startup: %d", m_last_NXDN_TG);			
-	LogInfo("    P25 Startup: %d", m_last_P25_TG);		
-	
+	LogInfo("    P25 Startup: %d", m_last_P25_TG);	
+	LogInfo("    YSF Options: %s", m_ysfoptions.c_str());			
+	LogInfo("    FCS Options: %s", m_fcsoptions.c_str());	
+
 	CYSFNetwork rptNetwork(myAddress, myPort, m_callsign, debug);
 	rptNetwork.setDestination("MMDVM", rptAddress, rptPort);
 
@@ -686,7 +687,7 @@ bool CYSFGateway::startupLinking()
 	int tmp_id = m_conf.getNetworkTypeStartup();	
 	CReflector* reflector;
 
-	LogMessage("Entrado en startup");
+//	LogMessage("Entrado en startup");
 	
 	switch(tmp_id) {
 		case NONE:
@@ -719,9 +720,9 @@ bool CYSFGateway::startupLinking()
 		}
 		break;
 	}
-	LogMessage("Fijado reflectores en startup");
+//	LogMessage("Fijado reflectores en startup");
 	m_wiresX->setReflectors(m_actual_ref);
-		LogMessage("Fijado reflectores en startup");
+//		LogMessage("Fijado reflectores en startup");
 	m_tg_type = (TG_TYPE) tmp_id;
 	m_Streamer->put_tgType(m_tg_type);
 
@@ -743,15 +744,18 @@ bool CYSFGateway::startupLinking()
 			m_dmrNetwork->enable(true);
 			return true;
 		}
-			LogMessage("listo para buscar reflector en startup");
+		//	LogMessage("listo para buscar reflector en startup");
 		if (is_number(m_startup)) reflector = m_actual_ref->findById(m_startup);
 		else reflector = m_actual_ref->findByName(m_startup);	
-			LogMessage("Encontrado reflector en startup");	
+		//	LogMessage("Encontrado reflector en startup");	
 		if (reflector != NULL) {
-			LogMessage("Antes de llamar a TGCOnnect en startup");	
+		//	LogMessage("Antes de llamar a TGCOnnect en startup");	
 			if (TG_Connect(atoi(reflector->m_id.c_str()))) {
 				LogMessage("Automatic (re-)connection to %5.5s - \"%s\"", reflector->m_id.c_str(), reflector->m_name.c_str());
 				m_original = atoi(reflector->m_id.c_str());
+				m_wiresX->setReflector(reflector, m_original);
+				// if ((m_tg_type == YSF) && (!m_ysfoptions.empty())) m_ysfNetwork->setOptions(m_ysfoptions);
+				// else if ((m_tg_type == FCS) && (!m_fcsoptions.empty())) m_fcsNetwork->setOptions(m_fcsoptions);
 				m_current_num = m_original;
 				return true;
 			}
@@ -786,7 +790,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			if (last_type == DMR) {
 				m_dmrNetwork->enable(false);					
 				//m_conv.reset();
-			}			
+			}		
 			dstID=m_last_YSF_TG;
 			m_tg_type=YSF;
 			m_Streamer->put_tgType(m_tg_type);		
@@ -854,14 +858,14 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 
 				reflector = m_ysfReflectors->findById(dst_str_ID);
 				if (reflector != NULL) {
-					if (dstID!=m_last_YSF_TG || first_time_YSF) {
+					 if (dstID!=m_last_YSF_TG || first_time_YSF) {
 						first_time_YSF = false;
 						//LogMessage("Automatic (re-)connection to %5.5s - \"%s\"", reflector->m_id.c_str(), reflector->m_name.c_str());
 
 						m_ysfNetwork->setDestination(reflector->m_name, reflector->m_address, reflector->m_port);
 						m_ysfNetwork->writePoll(3U);
 						m_current_num = atoi(reflector->m_id.c_str());
-					}
+					 }
 
 					m_current = reflector->m_name;
 					m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
@@ -872,6 +876,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 					m_Streamer->put_dstid(dstID);
 					m_wiresX->setReflectors(m_ysfReflectors);					
 					m_wiresX->setReflector(reflector, dstID);
+					if (!m_ysfoptions.empty()) m_ysfNetwork->setOptions(m_ysfoptions);
 					m_last_YSF_TG = dstID;
 					first_time_ysf_dgid = true;
 					m_dgid_timer.start();
@@ -885,12 +890,12 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				//LogMessage("Conecting to FCS  %s.",dst_str_ID.c_str());
 				reflector = m_fcsReflectors->findById(dst_str_ID);
 				if (reflector != NULL) {
+					m_fcsNetwork->clearDestination();
 					sprintf(tmp,"FCS%05d",atoi(reflector->m_id.c_str()));
 					//LogMessage("Conecting FCS to %s.",tmp);					
 					bool ok = m_fcsNetwork->writeLink(std::string(tmp));
 					if (ok) {
 						//LogMessage("Automatic (re-)connection to %s", reflector->m_name.c_str());
-
 						m_current = reflector->m_name;
 						m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
 						m_lostTimer.start();
@@ -901,6 +906,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 						m_last_FCS_TG = dstID;						
 						m_wiresX->setReflectors(m_fcsReflectors);
 						m_wiresX->setReflector(reflector, dstID);
+						if (!m_fcsoptions.empty())  m_fcsNetwork->setOptions(m_fcsoptions);
 						m_current_num = atoi(reflector->m_id.c_str());
 						m_last_FCS_TG = dstID;
 					} else return false;							

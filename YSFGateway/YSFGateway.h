@@ -91,11 +91,10 @@ private:
 	CUDPSocket*      m_remoteSocket;
 	CStreamer*		 m_Streamer;
 	unsigned int	 m_DGID;
-	bool			 m_dmr_closed;
-	bool			 m_fcs_closed;	
-	bool			 m_ysf_closed;
 	unsigned int 	 m_original;
 	unsigned int     m_current_num;
+	std::string      m_ysfoptions;
+	std::string      m_fcsoptions;
 
 	bool startupLinking();
 	void startupReLinking();
