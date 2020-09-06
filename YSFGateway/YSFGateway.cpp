@@ -416,10 +416,10 @@ int CYSFGateway::run()
 			m_remoteSocket = NULL;
 		}
 	}
-
+	
+	m_wiresX = m_Streamer->createWiresX(&rptNetwork, m_conf.getWiresXMakeUpper(), m_callsign, m_conf.getLocation());
 	m_Streamer->createGPS(m_callsign);
 	m_Streamer->setBeacon(m_inactivityTimer,&m_lostTimer, m_NoChange, m_DGID);
-	m_wiresX = m_Streamer->createWiresX(&rptNetwork, m_conf.getWiresXMakeUpper(), m_callsign, m_conf.getLocation());	 	
 	m_Streamer->Init(&rptNetwork, m_ysfNetwork, m_fcsNetwork, m_dmrNetwork, m_dmrReflectors);
 
 	if (startupLinking()==false) {
@@ -1007,8 +1007,9 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_Streamer->put_dstid(dstID);
 				m_last_NXDN_TG = dstID;
 				m_wiresX->setReflector(reflector, m_Streamer->get_dstid());
-				m_wiresX->setReflectors(m_nxdnReflectors);				
-				m_wiresX->SendRConnect(m_ysfNetwork);
+				m_wiresX->setReflectors(m_nxdnReflectors);
+				m_wiresX->SendCReply();				
+				//m_wiresX->SendRConnect(m_ysfNetwork);
 				m_current_num = atoi(reflector->m_id.c_str());
 				m_last_NXDN_TG = dstID;
 			} else return false;
@@ -1026,8 +1027,9 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_Streamer->put_dstid(dstID);
 				m_last_P25_TG = dstID;
 				m_wiresX->setReflector(reflector, m_Streamer->get_dstid());
-				m_wiresX->setReflectors(m_p25Reflectors);				
-				m_wiresX->SendRConnect(m_ysfNetwork);
+				m_wiresX->setReflectors(m_p25Reflectors);
+				m_wiresX->SendCReply();
+				//m_wiresX->SendRConnect(m_ysfNetwork);
 				m_current_num = atoi(reflector->m_id.c_str());
 				m_last_P25_TG = dstID;
 			} else return false;

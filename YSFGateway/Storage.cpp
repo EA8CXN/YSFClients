@@ -462,7 +462,7 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 			//callsign
 			::memcpy((char*)(data+22U),tmp_buffer+16U,10U);
 			//date
-			::memcpy((char*)(data+31U),tmp_buffer+44U,12U);
+			::memcpy((char*)(data+32U),tmp_buffer+43U,12U);
 			//gps
 			::memcpy((char*)(data+44U),tmp_buffer+66U,18U);
 			//text
@@ -581,11 +581,12 @@ unsigned int CWiresXStorage::GetPictureHeader(unsigned char *data,unsigned int n
 	// TIME 1
 	::memcpy(data+34U,record+24U,12U);
 	// TALKY KEY
-	char key[7]="HE5Gbv";
+	//char key[7]="HE5Gbv";
 
-	::memcpy(data+46U,key,6U);	
+	
 	// file name
-	::sprintf((char *)(data+52U),"%06u.jpg",number); 
+	::sprintf((char *)(data+52U),"%06u.jpg",0U);  //number 
+	::memcpy(data+46U,record+46,10U);
 	// gps
 	::memcpy(data+62U,record,18U);
 	//SUBJECT

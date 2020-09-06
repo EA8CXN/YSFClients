@@ -67,7 +67,8 @@ private:
 	std::string                m_name;
 	bool                       m_linked;
 	bool                       m_id_response;
-	unsigned int			   m_room_id;					
+	unsigned int			   m_room_id;	
+	std::string				   m_node;				
 
 	void RoomID();
 };

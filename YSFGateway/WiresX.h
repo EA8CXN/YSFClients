@@ -99,6 +99,7 @@ public:
 	void SendRConnect(CYSFNetwork* ysfNetwork);
 	bool sendNetwork(void);
 	void getMode1DCH(unsigned char *dch,unsigned int fn);
+	std::string getCallsign();
 	
 	//void processConnect(CReflector* reflector);
 	void processDisconnect(const unsigned char* source = NULL);

@@ -654,7 +654,7 @@ void CModeConv::AMB2YSF_Mode1(unsigned char * bytes){
 
 	m_YSF.addData(&TAG_DATAV1, 1U);
 	m_YSF.addData(vch, 9U);
-	//CUtils::dump(1U, "VCH V/D type 1:", vch, 9U);
+//	CUtils::dump(1U, "VCH V/D type 1:", vch, 9U);
 
 	m_ysfN += 1U;
 }
@@ -1014,12 +1014,12 @@ void CModeConv::putDMRHeader()
 
 void CModeConv::putDMRHeaderV1()
 {
-	unsigned char vch[9U];
+	unsigned char vch[13U];
 
-	::memset(vch, 0, 9U);
+	::memset(vch, 0, 13U);
 
 	m_YSF.addData(&TAG_HEADERV1, 1U);
-	m_YSF.addData(vch, 9U);
+	m_YSF.addData(vch, 13U);
 	m_ysfN += 1U;
 }
 
@@ -1052,9 +1052,9 @@ void CModeConv::putDMREOT(bool do_fill)
 
 void CModeConv::putDMREOTV1(bool do_fill)
 {
-	unsigned char vch[9U];
+	unsigned char vch[13U];
 
-	::memset(vch, 0, 9U);
+	::memset(vch, 0, 13U);
 	
 	if (do_fill) {
 		unsigned int fill = 5U - (m_ysfN % 5U);
@@ -1065,7 +1065,7 @@ void CModeConv::putDMREOTV1(bool do_fill)
 		}
 	}
 	m_YSF.addData(&TAG_EOTV1, 1U);
-	m_YSF.addData(vch, 9U);
+	m_YSF.addData(vch, 13U);
 	m_ysfN += 1U;
 }
 
@@ -1187,7 +1187,7 @@ unsigned int CModeConv::getYSF(unsigned char* data)
 			m_YSF.getData(data, 13U);
 			m_ysfN -= 1U;
 			return TAG_DATA;
-		} else {
+		} else if (tag[0U] == TAG_DATAV1) {
 			data += 9U;
 			m_YSF.getData(tag, 1U);
 			m_YSF.getData(data, 9U);
@@ -1215,8 +1215,7 @@ unsigned int CModeConv::getYSF(unsigned char* data)
 			return TAG_DATAV1;		
 		}
 	}
-	else
-		return TAG_NODATA;
+	return TAG_NODATA;
 }
 
 void CModeConv::putVCH(unsigned char * buffer) {

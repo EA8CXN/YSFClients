@@ -71,16 +71,7 @@ bool CFCSNetwork::open()
 {
 	LogMessage("Resolving FCS00x addresses");
 
-	m_addresses["FCS001"] = CUDPSocket::lookup("fcs001.xreflector.net");
-	m_addresses["FCS002"] = CUDPSocket::lookup("fcs002.xreflector.net");
-	m_addresses["FCS003"] = CUDPSocket::lookup("fcs003.xreflector.net");
-	m_addresses["FCS004"] = CUDPSocket::lookup("fcs004.xreflector.net");
-	m_addresses["FCS005"] = CUDPSocket::lookup("fcs005.xreflector.net");
-	m_addresses["FCS222"] = CUDPSocket::lookup("fcs222.xreflector.net");
-	m_addresses["FCS224"] = CUDPSocket::lookup("fcs224.xreflector.net");
-	m_addresses["FCS232"] = CUDPSocket::lookup("fcs232.xreflector.net");	
-	m_addresses["FCS260"] = CUDPSocket::lookup("fcs260.xreflector.net");
-	m_addresses["FCS262"] = CUDPSocket::lookup("fcs262.xreflector.net");	
+	m_addresses["FCS999"] = CUDPSocket::lookup("fcs999.xreflector.net");
 
 	LogMessage("Opening FCS network connection");
 
@@ -105,6 +96,8 @@ void CFCSNetwork::write(const unsigned char* data)
 	unsigned char buffer[130U];
 	::memset(buffer + 0U, ' ', 130U);
 	::memcpy(buffer + 0U, data + 35U, 120U);
+	// OE1KBC 2020-09-05 frame# was missing
+	::memcpy(buffer + 120U, data + 34U, 1U);
 	::memcpy(buffer + 121U, m_reflector.c_str(), 8U);
 
 	if (m_debug)
@@ -117,12 +110,21 @@ bool CFCSNetwork::writeLink(const std::string& reflector)
 {
 	if (m_state != FCS_LINKED) {
 		std::string name = reflector.substr(0U, 6U);
-		if (m_addresses.count(name) == 0U) {
-			LogError("Unknown FCS reflector - %s", name.c_str());
-			return false;
-		}
 
-		m_address = m_addresses[name];
+		if (m_addresses.count(name) == 0U) {
+			char fcs_url[30U];
+			::sprintf(fcs_url, "%s.xreflector.net", name.c_str());
+			m_address = CUDPSocket::lookup(fcs_url);
+
+			if(m_address.s_addr == INADDR_NONE)
+			{
+				LogError("Unknown FCS reflector - %s", name.c_str());
+				return false;
+			}
+		}
+		else
+			m_address = m_addresses[name];
+
 		if (m_address.s_addr == INADDR_NONE) {
 			LogError("FCS reflector %s has no address", name.c_str());
 			return false;
@@ -193,6 +195,7 @@ void CFCSNetwork::clock(unsigned int ms)
 			LogMessage("Linked to %s", m_print.c_str());
 		m_state = FCS_LINKED;
 		writeInfo();
+		writeOptions();			
 	}
 
 	if (length == 10 && m_state == FCS_LINKING) {
@@ -281,7 +284,7 @@ void CFCSNetwork::writeOptions()
 {
 	if (m_state != FCS_LINKED)
 		return;
-
+	LogMessage("FCS Options: *%s*", m_opt.c_str());
 	if (m_opt.size() < 1)
 		return;
 

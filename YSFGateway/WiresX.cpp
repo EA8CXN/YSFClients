@@ -47,32 +47,32 @@ const unsigned char CAT_REQ[]   = {0x5DU, 0x67U, 0x5FU};
 const unsigned char BEACON_REQ_GPS[]   = {0x47U, 0x64U, 0x5FU};
 const unsigned char BEACON_REQ_NOGPS[]   = {0x47U, 0x63U, 0x5FU};
 
-const unsigned char DX_RESP[]   = {0x5DU, 0x51U, 0x5FU, 0x26U};
-const unsigned char DX_BEACON[]   = {0x5DU, 0x42U, 0x5FU, 0x26U};
+const unsigned char DX_RESP[]   = {0x5DU, 0x51U, 0x5FU, 0x25U};
+const unsigned char DX_BEACON[]   = {0x5DU, 0x42U, 0x5FU, 0x25U};
 
-const unsigned char CONN_RESP[] = {0x5DU, 0x41U, 0x5FU, 0x26U};
-const unsigned char DISC_RESP[] = {0x5DU, 0x41U, 0x5FU, 0x26U};
-const unsigned char ALL_RESP[]  = {0x5DU, 0x46U, 0x5FU, 0x26U};
+const unsigned char CONN_RESP[] = {0x5DU, 0x41U, 0x5FU, 0x25U};
+const unsigned char DISC_RESP[] = {0x5DU, 0x41U, 0x5FU, 0x25U};
+const unsigned char ALL_RESP[]  = {0x5DU, 0x46U, 0x5FU, 0x25U};
 
-const unsigned char LNEWS_RESP[]  = {0x5DU, 0x46U, 0x5FU, 0x26U};
-const unsigned char NEWS_RESP[]  = {0x5DU, 0x43U, 0x5FU, 0x26U};
+const unsigned char LNEWS_RESP[]  = {0x5DU, 0x46U, 0x5FU, 0x25U};
+const unsigned char NEWS_RESP[]  = {0x5DU, 0x43U, 0x5FU, 0x25U};
 
 const unsigned char DEFAULT_FICH[] = {0x20U, 0x00U, 0x01U, 0x00U};
 const unsigned char NET_HEADER[] = "YSFD                    ALL      ";
 
 const unsigned char LIST_REQ[]  = {0x5DU, 0x6CU, 0x5FU};
-const unsigned char LIST_RESP[]  = {0x5DU, 0x4CU, 0x5FU, 0x26U};
+const unsigned char LIST_RESP[]  = {0x5DU, 0x4CU, 0x5FU, 0x25U};
 
 const unsigned char GET_RSC[]  = {0x5DU, 0x72U, 0x5FU};
-const unsigned char GET_MSG_RESP[]  = {0x5DU, 0x54U, 0x5FU, 0x26U};
+const unsigned char GET_MSG_RESP[]  = {0x5DU, 0x54U, 0x5FU, 0x25U};
 
 const unsigned char MESSAGE_REC_GPS[]  = {0x47U, 0x66U, 0x5FU};
 const unsigned char MESSAGE_REC[]  = {0x47U, 0x65U, 0x5FU};
 
-const unsigned char MESSAGE_SEND[]  = {0x47U, 0x66U, 0x5FU, 0x26U};
+const unsigned char MESSAGE_SEND[]  = {0x47U, 0x66U, 0x5FU, 0x25U};
 
 const unsigned char VOICE_RESP[]  = {0x5DU, 0x56U, 0x5FU, 0x25U};
-const unsigned char VOICE_ACK[]  = {0x5DU, 0x30U, 0x5FU, 0x26U};
+const unsigned char VOICE_ACK[]  = {0x5DU, 0x30U, 0x5FU, 0x25U};
 
 const unsigned char PICT_REC_GPS[]  = {0x47U, 0x68U, 0x5FU};
 const unsigned char PICT_REC[]  = {0x47U, 0x67U, 0x5FU};
@@ -83,21 +83,21 @@ const unsigned char PICT_BEGIN2[]  = {0x4EU, 0x64U, 0x5FU};
 
 const unsigned char PICT_END[]  = {0x4EU, 0x65U, 0x5FU};
 
-const unsigned char PICT_DATA_RESP[]  = {0x4EU, 0x62U, 0x5FU, 0x26U};
-const unsigned char PICT_BEGIN_RESP[]  = {0x4EU, 0x63U, 0x5FU, 0x26U};
-const unsigned char PICT_BEGIN_RESP_GPS[]  = {0x4EU, 0x64U, 0x5FU, 0x26U};
-const unsigned char PICT_END_RESP[]  = {0x4EU, 0x65U, 0x5FU, 0x26U};
+const unsigned char PICT_DATA_RESP[]  = {0x4EU, 0x62U, 0x5FU, 0x25U};
+const unsigned char PICT_BEGIN_RESP[]  = {0x4EU, 0x63U, 0x5FU, 0x25U};
+const unsigned char PICT_BEGIN_RESP_GPS[]  = {0x4EU, 0x64U, 0x5FU, 0x25U};
+const unsigned char PICT_END_RESP[]  = {0x4EU, 0x65U, 0x5FU, 0x25U};
 
-const unsigned char PICT_PREAMB_RESP[]  = {0x5DU, 0x50U, 0x5FU, 0x26U};
+const unsigned char PICT_PREAMB_RESP[]  = {0x5DU, 0x50U, 0x5FU, 0x25U};
 
-const unsigned char UP_ACK[] = {0x47U, 0x30U, 0x5FU, 0x26U};
+const unsigned char UP_ACK[] = {0x47U, 0x30U, 0x5FU, 0x25U};
 
 const unsigned char voice_mark[] = {0x5A,0x4C,0x5A,0x5A,0x5A,0x4C,0x76,0x58,0x1C,0x6C,0x20,0x1C,0x30,0x57};
 
 CWiresX::CWiresX(CWiresXStorage* storage, const std::string& callsign, std::string& location, CYSFNetwork* network, bool makeUpper, CModeConv *mconv) :
 //CThread(),
 m_storage(storage),
-m_callsign(callsign),
+m_callsign(),
 m_location(location),
 //m_tgfile(tgfile),
 //m_reloadTime(reloadTime),
@@ -116,7 +116,7 @@ m_count(0),
 m_timer(1000U, 1U),
 m_ptimer(1000U, 1U),
 m_timeout(1000U, 10U),
-m_seqNo(0U),
+m_seqNo(20U),
 m_header(NULL),
 m_csd1(NULL),
 m_csd2(NULL),
@@ -145,12 +145,27 @@ m_pcount(0),
 m_end_picture(true),
 error_upload(false)
 {
+	char tmp[20U];
+
 	assert(network != NULL);
 	m_enable = false;
-	m_node = callsign;
-	m_node.resize(YSF_CALLSIGN_LENGTH, ' ');
 
+	m_node = callsign;
+	m_node.resize(YSF_CALLSIGN_LENGTH, ' ');	
+	LogMessage("m_node = %s",m_node.c_str());	
+	strcpy(tmp,callsign.c_str());
+	unsigned int i=0;
+	while (i<strlen(tmp) && isalnum(tmp[i])) {
+		i++;
+	}
+	i--;
+	while ((i>0) && isdigit(tmp[i])) {
+		i--;
+	}
+	tmp[i+1]=0U;
+	m_callsign = std::string(tmp);
 	m_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+	LogMessage("m_callsign = %s",m_callsign.c_str());
 	m_location.resize(14U, ' ');	
 
 	m_command = new unsigned char[1100U];
@@ -176,6 +191,12 @@ CWiresX::~CWiresX()
 	delete[] m_csd1;
 	delete[] m_header;
 	delete[] m_command;
+}
+
+std::string CWiresX::getCallsign() {
+
+	return m_callsign;
+	
 }
 
 void CWiresX::setInfo(const std::string& name, unsigned int txFrequency, unsigned int rxFrequency)
@@ -208,6 +229,7 @@ void CWiresX::setInfo(const std::string& name, unsigned int txFrequency, unsigne
 	LogInfo("The ID of this repeater is %s", id);
 
 	m_id = std::string(id);
+	m_id.resize(YSF_CALLSIGN_LENGTH,' ');
 
 	::memset(m_csd1, '*', 20U);
 	::memset(m_csd2, ' ', 20U);
@@ -851,9 +873,9 @@ void CWiresX::clock(unsigned int ms)
 		case WXSI_GET_MESSAGE:
 			sendGetMessageReply();
 			break;
-	    case WXSI_SEND_RCONNECT:
-			makeConnect();
-			break;
+	    // case WXSI_SEND_RCONNECT:
+		// 	makeConnect();
+		// 	break;
 	    case WXSI_SEND_PREPLY:
 			makeEndPicture();
 			break;	
@@ -958,8 +980,8 @@ void CWiresX::createReply(const unsigned char* data, unsigned int length, const 
 	unsigned char buffer[200U];
 	::memcpy(buffer, m_header, 34U);
 	
-	if (dst_callsign)
-		::memcpy(buffer+24U,dst_callsign,10U);	
+	// if (dst_callsign)
+	// 	::memcpy(buffer+24U,dst_callsign,10U);	
 
 	CSync::addYSFSync(buffer + 35U);
 
@@ -1546,7 +1568,7 @@ void CWiresX::sendGetMessageReply()
 
 		offset=194U;
 		voice_data[offset] = 0x03U;			// End of data marker
-		voice_data[offset+1] = CCRC::addCRC(voice_data+100U, 94U);
+		voice_data[offset+1] = CCRC::addCRC(voice_data+100U, 95U);
 
 		CUtils::dump(1U,"Voice Data Block",voice_data+100U,100U);
 
@@ -1659,7 +1681,8 @@ void CWiresX::sendPictureData()
    else {
 	   m_picture_state = WXPIC_END;
 	   int time = (m_offset*5000U)/1024U;
-	   m_ptimer.start(time/1000U,time%1000U);
+	   //m_ptimer.start(time/1000U,time%1000U);
+	   m_ptimer.start(3,500);	   
    }
 }
 
@@ -1730,7 +1753,7 @@ void CWiresX::sendUploadReply(bool pict)
 	data[offset + 0U] = 0x03U;			// End of data marker
 	data[offset + 1U] = CCRC::addCRC(data, offset + 1U);
 
-	//CUtils::dump("Upload ACK", data, offset + 2U);
+	CUtils::dump("Upload ACK", data, offset + 2U);
 	LogMessage("Upload ACK");
 
 	createReply(data, offset + 2U, m_source.c_str());
@@ -1979,11 +2002,11 @@ bool CWiresX::EndPicture()
 	return m_end_picture;
 }
 
-void CWiresX::SendRConnect(CYSFNetwork* ysfNetwork) {
-	m_ysfNetwork = ysfNetwork;
-	m_status = WXSI_SEND_RCONNECT;
-	m_timer.start();
-}
+// void CWiresX::SendRConnect(CYSFNetwork* ysfNetwork) {
+// 	m_ysfNetwork = ysfNetwork;
+// 	m_status = WXSI_SEND_RCONNECT;
+// 	m_timer.start();
+// }
 
 void CWiresX::SendPReply(CYSFNetwork* ysfNetwork) {
 	m_ysfNetwork = ysfNetwork;
@@ -2027,140 +2050,140 @@ void CWiresX::makeEndPicture()
 	m_ptimer.start(1);
 }
 
-char block_TG[]={0x00U,0x5DU,0x23U,0x5FU,0x26U,0x30U,0x30U,0x30U,0x30U,0x30U,0x20U,0x20U,0x20U,0x20U,0x20U,0x03,0xD0};
+// char block_TG[]={0x00U,0x5DU,0x23U,0x5FU,0x25U,0x30U,0x30U,0x30U,0x30U,0x30U,0x20U,0x20U,0x20U,0x20U,0x20U,0x03,0xD0};
 
-void CWiresX::makeConnect() {
-unsigned char buf[20];
-char tmp[6];
+// void CWiresX::makeConnect() {
+// unsigned char buf[20];
+// char tmp[6];
 
-  memcpy(buf,block_TG,17U);
-  sprintf(tmp,"%05d",m_dstID);
-  memcpy(buf+5U,tmp,5U);
+//   memcpy(buf,block_TG,17U);
+//   sprintf(tmp,"%05d",m_dstID);
+//   memcpy(buf+5U,tmp,5U);
  
-  buf[15U] = 0x03U;			// End of data marker
-  buf[16U] = CCRC::addCRC(buf, 16U);
-  makePacket(m_ysfNetwork,buf,17U);
-}
+//   buf[15U] = 0x03U;			// End of data marker
+//   buf[16U] = CCRC::addCRC(buf, 16U);
+//   makePacket(m_ysfNetwork,buf,17U);
+// }
 
-void CWiresX::makePacket(CYSFNetwork* ysfNetwork, unsigned char *data, unsigned int length)
-{
-	assert(ysfNetwork != NULL);
-	assert(data != NULL);
-	assert(length > 0U);
+// void CWiresX::makePacket(CYSFNetwork* ysfNetwork, unsigned char *data, unsigned int length)
+// {
+// 	assert(ysfNetwork != NULL);
+// 	assert(data != NULL);
+// 	assert(length > 0U);
 
-	unsigned char bt = 0U;
+// 	unsigned char bt = 0U;
 
-	if (length > 260U) {
-		bt = 1U;
-		bt += (length - 260U) / 259U;
+// 	if (length > 260U) {
+// 		bt = 1U;
+// 		bt += (length - 260U) / 259U;
 
-		length += bt;
-	}
+// 		length += bt;
+// 	}
 
-	if (length > 20U) {
-		unsigned int blocks = (length - 20U) / 40U;
-		if ((length % 40U) > 0U) blocks++;
-		length = blocks * 40U + 20U;
-	} else {
-		length = 20U;
-	}
+// 	if (length > 20U) {
+// 		unsigned int blocks = (length - 20U) / 40U;
+// 		if ((length % 40U) > 0U) blocks++;
+// 		length = blocks * 40U + 20U;
+// 	} else {
+// 		length = 20U;
+// 	}
 
-	unsigned char ft = calculateFT(length, 0U);
+// 	unsigned char ft = calculateFT(length, 0U);
 
-	unsigned char seqNo = 0U;
+// 	unsigned char seqNo = 0U;
 
-	// Write the header
-	unsigned char buffer[200U];
-	::memcpy(buffer, m_header, 34U);
+// 	// Write the header
+// 	unsigned char buffer[200U];
+// 	::memcpy(buffer, m_header, 34U);
 
-	CSync::addYSFSync(buffer + 35U);
+// 	CSync::addYSFSync(buffer + 35U);
 
-	CYSFFICH fich;
-	fich.load(DEFAULT_FICH);
-	fich.setFI(YSF_FI_HEADER);
-	fich.setBT(bt);
-	fich.setFT(ft);
-	fich.encode(buffer + 35U);
+// 	CYSFFICH fich;
+// 	fich.load(DEFAULT_FICH);
+// 	fich.setFI(YSF_FI_HEADER);
+// 	fich.setBT(bt);
+// 	fich.setFT(ft);
+// 	fich.encode(buffer + 35U);
 
-	CYSFPayload payload;
-	payload.writeDataFRModeData1(m_csd1, buffer + 35U);
-	payload.writeDataFRModeData2(m_csd2, buffer + 35U);
+// 	CYSFPayload payload;
+// 	payload.writeDataFRModeData1(m_csd1, buffer + 35U);
+// 	payload.writeDataFRModeData2(m_csd2, buffer + 35U);
 
-	buffer[34U] = seqNo;
-	seqNo += 2U;
+// 	buffer[34U] = seqNo;
+// 	seqNo += 2U;
 
-	writeData(buffer);
-//	ysfNetwork->write(buffer);
+// 	writeData(buffer);
+// //	ysfNetwork->write(buffer);
 
-	fich.setFI(YSF_FI_COMMUNICATIONS);
+// 	fich.setFI(YSF_FI_COMMUNICATIONS);
 
-	unsigned char fn = 0U;
-	unsigned char bn = 0U;
+// 	unsigned char fn = 0U;
+// 	unsigned char bn = 0U;
 
-	unsigned int offset = 0U;
-	while (offset < length) {
-		switch (fn) {
-		case 0U: {
-				ft = calculateFT(length, offset);
-				payload.writeDataFRModeData1(m_csd1, buffer + 35U);
-				payload.writeDataFRModeData2(m_csd2, buffer + 35U);
-			}
-			break;
-		case 1U:
-			payload.writeDataFRModeData1(m_csd3, buffer + 35U);
-			if (bn == 0U) {
-				payload.writeDataFRModeData2(data + offset, buffer + 35U);
-				offset += 20U;
-			} else {
-				// All subsequent entries start with 0x00U
-				unsigned char temp[20U];
-				::memcpy(temp + 1U, data + offset, 19U);
-				temp[0U] = 0x00U;
-				payload.writeDataFRModeData2(temp, buffer + 35U);
-				offset += 19U;
-			}
-			break;
-		default:
-			payload.writeDataFRModeData1(data + offset, buffer + 35U);
-			offset += 20U;
-			payload.writeDataFRModeData2(data + offset, buffer + 35U);
-			offset += 20U;
-			break;
-		}
+// 	unsigned int offset = 0U;
+// 	while (offset < length) {
+// 		switch (fn) {
+// 		case 0U: {
+// 				ft = calculateFT(length, offset);
+// 				payload.writeDataFRModeData1(m_csd1, buffer + 35U);
+// 				payload.writeDataFRModeData2(m_csd2, buffer + 35U);
+// 			}
+// 			break;
+// 		case 1U:
+// 			payload.writeDataFRModeData1(m_csd3, buffer + 35U);
+// 			if (bn == 0U) {
+// 				payload.writeDataFRModeData2(data + offset, buffer + 35U);
+// 				offset += 20U;
+// 			} else {
+// 				// All subsequent entries start with 0x00U
+// 				unsigned char temp[20U];
+// 				::memcpy(temp + 1U, data + offset, 19U);
+// 				temp[0U] = 0x00U;
+// 				payload.writeDataFRModeData2(temp, buffer + 35U);
+// 				offset += 19U;
+// 			}
+// 			break;
+// 		default:
+// 			payload.writeDataFRModeData1(data + offset, buffer + 35U);
+// 			offset += 20U;
+// 			payload.writeDataFRModeData2(data + offset, buffer + 35U);
+// 			offset += 20U;
+// 			break;
+// 		}
 
-		fich.setFT(ft);
-		fich.setFN(fn);
-		fich.setBT(bt);
-		fich.setBN(bn);
-		fich.encode(buffer + 35U);
+// 		fich.setFT(ft);
+// 		fich.setFN(fn);
+// 		fich.setBT(bt);
+// 		fich.setBN(bn);
+// 		fich.encode(buffer + 35U);
 
-		buffer[34U] = seqNo;
-		seqNo += 2U;
+// 		buffer[34U] = seqNo;
+// 		seqNo += 2U;
 		
-	writeData(buffer);
-//		ysfNetwork->write(buffer);
+// 	writeData(buffer);
+// //		ysfNetwork->write(buffer);
 
-		fn++;
-		if (fn >= 8U) {
-			fn = 0U;
-			bn++;
-		}
-	}
+// 		fn++;
+// 		if (fn >= 8U) {
+// 			fn = 0U;
+// 			bn++;
+// 		}
+// 	}
 
-	// Write the trailer
-	fich.setFI(YSF_FI_TERMINATOR);
-	fich.setFN(fn);
-	fich.setBN(bn);
-	fich.encode(buffer + 35U);
+// 	// Write the trailer
+// 	fich.setFI(YSF_FI_TERMINATOR);
+// 	fich.setFN(fn);
+// 	fich.setBN(bn);
+// 	fich.encode(buffer + 35U);
 
-	payload.writeDataFRModeData1(m_csd1, buffer + 35U);
-	payload.writeDataFRModeData2(m_csd2, buffer + 35U);
+// 	payload.writeDataFRModeData1(m_csd1, buffer + 35U);
+// 	payload.writeDataFRModeData2(m_csd2, buffer + 35U);
 
-	buffer[34U] = seqNo | 0x01U;
+// 	buffer[34U] = seqNo | 0x01U;
 	
-	writeData(buffer);
-//	ysfNetwork->write(buffer);
-}
+// 	writeData(buffer);
+// //	ysfNetwork->write(buffer);
+// }
 
 bool CWiresX::sendNetwork(void) {
 		
@@ -2175,7 +2198,13 @@ static bool start=true;
     //LogMessage("Send AMBE");
 	if (start) {
 		LogMessage("Start NEWS AUDIO Playing...");
-		m_conv->putDMRHeader();
+		m_conv->putDMRHeaderV1();
+		fread(buffer,1U,40U,m_ambefile);
+		m_conv->AMB2YSF_Mode1(buffer);
+		m_conv->AMB2YSF_Mode1(buffer+8U);
+		m_conv->AMB2YSF_Mode1(buffer+16U);
+		m_conv->AMB2YSF_Mode1(buffer+24U);
+		m_conv->AMB2YSF_Mode1(buffer+32U);			
 		m_ysfWatch.start();
 		start = false;
 		return;
@@ -2186,7 +2215,7 @@ static bool start=true;
 			LogMessage("Finish voice playing.");
 			fclose(m_ambefile);
 			m_ambefile = NULL;
-			m_conv->putDMREOT(true);
+			m_conv->putDMREOTV1(true);
 			m_status = WXSI_NONE;
 			//m_ysfWatch.stop();
 			start = true;
@@ -2208,17 +2237,18 @@ static unsigned int offset;
 		case 0:
 		// Callsign of node
 			memset(dch,'*',YSF_CALLSIGN_LENGTH);
-			memcpy(dch+YSF_CALLSIGN_LENGTH,m_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+			memcpy(dch+YSF_CALLSIGN_LENGTH,m_node.c_str(),YSF_CALLSIGN_LENGTH);
 			break;
 		case 1:
 		// Callsign of source
-			memcpy(dch,m_source.c_str(),YSF_CALLSIGN_LENGTH);
-			memcpy(dch,m_source.c_str(),YSF_CALLSIGN_LENGTH);
+			memcpy(dch,m_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+			memset(dch+YSF_CALLSIGN_LENGTH,0x20,YSF_CALLSIGN_LENGTH);
+			//memcpy(dch+YSF_CALLSIGN_LENGTH,m_callsign.c_str(),YSF_CALLSIGN_LENGTH);
 			break;
 		case 2:
 		// Number of repeater
 			memcpy(dch,m_id.c_str(),YSF_CALLSIGN_LENGTH);
-			memcpy(dch,m_id.c_str(),YSF_CALLSIGN_LENGTH);			
+			memcpy(dch+YSF_CALLSIGN_LENGTH,m_id.c_str(),YSF_CALLSIGN_LENGTH);			
 			break; 
 		case 3:
 			offset = 100U;
