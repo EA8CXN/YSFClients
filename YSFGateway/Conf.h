@@ -147,6 +147,7 @@ public:
   std::string  getNewsPath() const;  
   std::string  getBeaconPath() const;
   unsigned int getStartupDGID() const;
+  unsigned int getJitter() const;
 
 private:
   std::string  m_file;
@@ -250,6 +251,7 @@ private:
   std::string  m_newspath;
   std::string  m_beaconpath; 
   unsigned int m_ysfDGID;
+  unsigned int m_jitter;
 };
 
 #endif

@@ -218,7 +218,7 @@ bool CAPRSReader::load_call()
 	std::string url = "/api/get?name=" + m_cs + "-Y," + m_cs + "-7," + m_cs + "-8," + m_cs + "-9,";
 	url = url + m_cs + "-14," + m_cs + "&what=loc&apikey=" + m_ApiKey + "&format=json";
 	//HTTP GET
-	std::string get_http = "GET " + url + " HTTP/1.1\r\nHost: api.aprs.fi\r\nUser-Agent: YSF2DMR/0.12\r\n\r\n";		
+	std::string get_http = "GET " + url + " HTTP/1.1\r\nHost: api.aprs.fi\r\nUser-Agent: YSFGATEWAY-EA7EE/1.01\r\n\r\n";		
 	CTCPSocket sockfd("api.aprs.fi", 80);
 
 	bool ret = sockfd.open();
@@ -237,9 +237,9 @@ bool CAPRSReader::load_call()
 		char tmp_str[20];
 		
 		for (i = 0; i < nDataLength; i++) {
-			if (i > 5 && buffer[i - 4] == '\"' && buffer[i - 3] == 'l' && buffer[i - 2] == 'a' && buffer[i - 1] == 't' && buffer[i] == '\"'){
+			if ((i > 3) && buffer[i - 4] == '\"' && buffer[i - 3] == 'l' && buffer[i - 2] == 'a' && buffer[i - 1] == 't' && buffer[i] == '\"'){
 				::memcpy(tmp_str, buffer + i + 2, 10U);
-				tmp_str[10] = 0;
+				tmp_str[10U] = 0;
 				if (tmp_str[0]=='\"') tmp_str[0]=' ';				
 				if ((comma=strchr(tmp_str,'\"'))!=NULL) *comma = 0;				
 				if ((comma=strchr(tmp_str,','))!=NULL)  *comma = 0;
@@ -249,9 +249,9 @@ bool CAPRSReader::load_call()
 					m_lat_table[m_cs] = latitude;
 				} else latitude = 0;
 			}
-			if (i > 5 && buffer[i - 4] == '\"' && buffer[i - 3] == 'l' && buffer[i - 2] == 'n' && buffer[i - 1] == 'g' && buffer[i] == '\"'){
+			if ((i > 3) && buffer[i - 4] == '\"' && buffer[i - 3] == 'l' && buffer[i - 2] == 'n' && buffer[i - 1] == 'g' && buffer[i] == '\"'){
 				::memcpy(tmp_str,buffer + i + 2, 10U);
-				tmp_str[10] = 0;
+				tmp_str[10U] = 0;
 				if (tmp_str[0]=='\"') tmp_str[0]=' ';				
 				if ((comma=strchr(tmp_str,'\"'))!=NULL) *comma = 0;				
 				if ((comma=strchr(tmp_str,','))!=NULL)  *comma = 0;			

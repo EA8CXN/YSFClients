@@ -36,6 +36,8 @@ const unsigned char TAG_NODATA   = 0x04U;
 const unsigned char TAG_HEADERV1 = 0x05U;
 const unsigned char TAG_DATAV1   = 0x06U;
 const unsigned char TAG_EOTV1    = 0x07U;
+const unsigned char TAG_DCH      = 0x08U;
+const unsigned char TAG_BULK     = 0x09U;
 
 enum HW_TYPE {
 	HWT_MMDVM,

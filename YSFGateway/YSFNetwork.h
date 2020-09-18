@@ -30,7 +30,7 @@
 class CYSFNetwork {
 public:
 	CYSFNetwork(const std::string& address, unsigned int port, const std::string& callsign, bool debug);
-	CYSFNetwork(unsigned int port, const std::string& callsign, bool debug);
+	CYSFNetwork(unsigned int port, const std::string& callsign, unsigned int rxFrequency, unsigned int txFrequency, const std::string& locator, const std::string& name, unsigned int id, bool debug);
 	~CYSFNetwork();
 
 	bool open();
@@ -61,6 +61,7 @@ private:
 	unsigned int               m_port;
 	unsigned char*             m_poll;
 	unsigned char*             m_options;	
+	unsigned char*             m_info;	
 	unsigned char*             m_unlink;
 	CRingBuffer<unsigned char> m_buffer;
 	CTimer                     m_pollTimer;
@@ -69,8 +70,6 @@ private:
 	bool                       m_id_response;
 	unsigned int			   m_room_id;	
 	std::string				   m_node;				
-
-	void RoomID();
 };
 
 #endif

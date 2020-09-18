@@ -61,7 +61,7 @@ m_saveAMBE(false),
 m_lookup(NULL),
 m_storage(NULL),
 m_wiresX(NULL),
-m_dtmf(NULL),
+//m_dtmf(NULL),
 m_colorcode(1U),
 m_srcid(1U),
 m_defsrcid(1U),
@@ -70,13 +70,18 @@ m_EmbeddedLC(),
 m_dmrFrames(0U),
 m_ysfFrames(0U),
 m_rpt_buffer(50000U, "RPTGATEWAY"),
-m_networkWatchdog(1000U, 0U, 500U)
+m_networkWatchdog(1000U, 0U, 500U),
+m_jitter_timer(NULL)
 {
 	//m_conv.reset();
     //m_conf = conf;
 
 	m_ysfFrame = new unsigned char[200U];
 	m_dmrFrame = new unsigned char[50U];
+
+	unsigned int jitter = m_conf->getJitter();
+	if (jitter != 0) m_jitter_timer = new CTimer(1000U,0U,jitter*100U);
+	else m_jitter_timer = NULL;
 	
 	::memset(m_ysfFrame, 0U, 200U);
 	::memset(m_dmrFrame, 0U, 50U);
@@ -91,11 +96,13 @@ m_networkWatchdog(1000U, 0U, 500U)
 	m_dstid 	= 		atoi(m_conf->getNetworkStartup().c_str());
 	
 	LogInfo("    AMBE Recording: %s", m_saveAMBE ? "yes" : "no");   
-
+	m_real_rcv_callsign ="";
+	m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH,' ');
 	std::string lookupFile = m_conf->getDMRIdLookupFile();
 	if (lookupFile.empty()) lookupFile  = "/usr/local/etc/DMRIds.dat";
 	m_lookup = new CDMRLookup(lookupFile,m_conf->getNetworkReloadTime());
-	m_lookup->read();		   
+	m_lookup->read();	
+	m_rcv_callsign = m_real_rcv_callsign;
 }
 
 CStreamer::~CStreamer() {
@@ -109,6 +116,10 @@ CStreamer::~CStreamer() {
 		m_writer->close();
 		delete m_writer;
 		delete m_gps;
+	}
+
+	if (m_jitter_timer != NULL) {
+		delete m_jitter_timer;
 	}
 
 	delete m_wiresX;
@@ -282,15 +293,16 @@ void CStreamer::BeaconLogic(void) {
 
 			switch (m_beacon_status) {
 				case BE_INIT:
-						m_rcv_callsign = "BEACON";
-						m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+						m_real_rcv_callsign = "BEACON";
+						m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+						m_rcv_callsign = m_real_rcv_callsign;
 						m_gid = 0;
 						if (m_APRS != NULL)
 							m_APRS->get_gps_buffer(m_gps_buffer,(int)(m_conf->getLatitude() * 1000),(int)(m_conf->getLongitude() * 1000));
-						else {
-							::memcpy(m_gps_buffer, dt1_temp, 10U);
-							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);							
-						}
+						// else {
+						// 	::memcpy(m_gps_buffer, dt1_temp, 10U);
+						// 	::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);							
+						// }
 						m_file_out=fopen(m_beacon_name.c_str(),"rb");
 						if (!m_file_out) {
 							LogMessage("Error opening file: %s.",m_beacon_name.c_str());
@@ -364,9 +376,10 @@ void CStreamer::Init(CYSFNetwork *modemNetwork, CYSFNetwork* ysfNetwork, CFCSNet
     m_modemNetwork = modemNetwork;
 	m_dmrReflectors = dmrReflectors;
 
-	m_not_busy=true;	
+	m_not_busy=true;
+	if (m_jitter_timer) m_jitter_timer->stop();	
 	m_open_channel=false;
-	m_data_ready=true;
+	m_data_ready=false;
 	m_unlinkReceived = false;
 	m_wx_returned = WXS_NONE;
 	memset(buffer, 0U, 2000U);
@@ -379,18 +392,18 @@ void CStreamer::Init(CYSFNetwork *modemNetwork, CYSFNetwork* ysfNetwork, CFCSNet
 
 CWiresX* CStreamer::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::string callsign, std::string location)
 {
-	assert(rptNetwork != NULL);
 
+	assert(rptNetwork != NULL);
 	m_storage = new CWiresXStorage(m_conf->getNewsPath());
 	m_wiresX = new CWiresX(m_storage, callsign, location, rptNetwork, makeUpper, &m_conv);
-	m_dtmf = new CDTMF();
+//	m_dtmf = new CDTMF();
 	
 	std::string name = m_conf->getName();
 
 	unsigned int txFrequency = m_conf->getTxFrequency();
 	unsigned int rxFrequency = m_conf->getRxFrequency();
-	
-	m_wiresX->setInfo(name, txFrequency, rxFrequency);
+
+	m_wiresX->setInfo(name, txFrequency, rxFrequency);	
 	m_wiresX->start();
 	m_callsign = callsign;
 
@@ -400,6 +413,15 @@ CWiresX* CStreamer::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::s
 void CStreamer::clock(TG_STATUS m_TG_connect_state, unsigned int ms) {
 	CDMRData tx_dmrdata;
 	unsigned char token;
+	    if (m_jitter_timer) m_jitter_timer->clock(ms);
+
+    	if (m_writer != NULL)
+			m_writer->clock(ms);
+		
+		m_wiresX->clock(ms);   
+
+		if (m_inacBeaconTimer!=NULL) 
+			m_inacBeaconTimer->clock(ms); 
 
 		// Beacon processing
 		if (m_TG_connect_state != TG_DISABLE) {
@@ -459,13 +481,13 @@ void CStreamer::clock(TG_STATUS m_TG_connect_state, unsigned int ms) {
 		// Get from modem and proccess data info		
 		GetFromModem(m_modemNetwork, m_TG_connect_state);
 
-    	if (m_writer != NULL)
-			m_writer->clock(ms);
-		
-		m_wiresX->clock(ms);   
-
-		if (m_inacBeaconTimer!=NULL) 
-			m_inacBeaconTimer->clock(ms); 
+	   if (m_jitter_timer && m_jitter_timer->hasExpired()) {
+		   if (m_open_channel == false) {
+			    LogMessage("Opening Channel...");
+		   	    m_open_channel = true;
+				m_jitter_timer->stop();
+			}
+	   }
 }
 
 void CStreamer::AMBE_write(unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt) {
@@ -506,18 +528,15 @@ void CStreamer::AMBE_write(unsigned char* buffer, unsigned char fi, unsigned cha
 	}	
 }
 
-unsigned char recv_buffer[2000U];
+//unsigned char recv_buffer[2000U];
 
 void CStreamer::GetFromModem(CYSFNetwork* rptNetwork, TG_STATUS m_TG_connect_state) {
-// unsigned char d_buffer[200];
+unsigned char recv_buffer[200];
 unsigned int len;
 unsigned char token;
-// unsigned char dch[20U];
-// unsigned char csd1[20U],csd2[20U];
 WX_STATUS ret;
 	
-	while ((len=rptNetwork->read(recv_buffer)) > 0U) {
-				
+	while ((len=rptNetwork->read(recv_buffer)) > 0U) {			
 		if (::memcmp(recv_buffer, "YSFD", 4U) != 0U) continue;
 		CYSFFICH fich;
 		bool valid = fich.decode(recv_buffer + 35U);
@@ -529,14 +548,14 @@ WX_STATUS ret;
 			unsigned char bn = fich.getBN();
 			unsigned char bt = fich.getBT();
 
-			if (fi == YSF_FI_HEADER) m_not_busy=false;
-			else if (fi == YSF_FI_TERMINATOR) {
-				if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
-				m_inacBeaconTimer->start();
-			}
-
 			if (m_TG_connect_state != TG_DISABLE) {
-
+				if (fi == YSF_FI_HEADER) m_not_busy=false;
+				else if (fi == YSF_FI_TERMINATOR) {
+					if (m_inactivityTimer!=NULL) m_inactivityTimer->start();
+					if (m_inacBeaconTimer!=NULL) m_inacBeaconTimer->start();
+					m_not_busy=true;
+				}
+				
 				if (dt == YSF_DT_VD_MODE1) {
 					//LogMessage("Packet len= %d, fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d.",len,fi,dt,fn,ft,bn,bt);	
 					//CUtils::dump(1U,"Bloque DV1",recv_buffer,155U);
@@ -597,7 +616,7 @@ WX_STATUS ret;
 					m_rpt_buffer.addData(recv_buffer,len);
 				} else if (dt == YSF_DT_VD_MODE2) {
 					m_data_ready = true;
-					if (m_tg_type!=DMR) {
+					if (m_tg_type != DMR) {
 						// flow not stop
 						token = 0x00;
 						m_rpt_buffer.addData(&token,1U);
@@ -624,7 +643,6 @@ WX_STATUS ret;
 			
 			if (dt == YSF_DT_DATA_FR_MODE) {
 					if (m_tg_type!=DMR) {
-
 						if (fi==YSF_FI_HEADER) {
 							// stop flow of data until we know if go to network or no
 							token = 0xFF;
@@ -632,27 +650,33 @@ WX_STATUS ret;
 						m_rpt_buffer.addData(&token,1U);
 						m_rpt_buffer.addData(recv_buffer,len);
 					}		
-					//processDTMF(buffer, dt);
+//					processDTMF(buffer, dt);
 					processWiresX(recv_buffer, fi, dt, fn, ft, bn, bt);
-					if (fi == YSF_FI_TERMINATOR) {
-						if (m_wiresX->sendNetwork()) {
-							LogMessage("Data allowed to go");
-						} else {
-							LogMessage("Data not allowed to go to Network");
-							m_rpt_buffer.clear();
+					if (m_tg_type!=DMR) {					
+						if (fi == YSF_FI_TERMINATOR) {
+							if (m_wiresX->sendNetwork()) {
+								LogMessage("Data allowed to go");
+							} else {
+								LogMessage("Data not allowed to go to Network");
+								m_rpt_buffer.clear();
+							}
+							m_data_ready = true;
 						}
-						m_data_ready = true;
 					}
 			}
-		if (m_gps != NULL)
-			m_gps->data(recv_buffer + 14U, recv_buffer + 35U, fi, dt, fn, ft, m_tg_type, m_dstid);			
 
-		if ((recv_buffer[34U] & 0x01U) == 0x01U) {
-			if (m_gps != NULL)
-				m_gps->reset();
-			m_dtmf->reset();
+			if (m_gps != NULL) {
+				m_gps->data(recv_buffer + 14U, recv_buffer + 35U, fi, dt, fn, ft, m_tg_type, m_dstid);
+				if (fi == YSF_FI_TERMINATOR) m_gps->reset();
 			}
-		} 
+
+// 		//Detect end of communication
+// 		if ((recv_buffer[34U] & 0x01U) == 0x01U) {
+// 			if (m_gps != NULL)
+// 				m_gps->reset();
+// //			m_dtmf->reset();
+// 			}
+ 		} 
 	}
 }
 
@@ -732,14 +756,14 @@ bool CStreamer::containsOnlyASCII(const std::string& filePath) {
   return true;
 }
 
-int silence_number;
+unsigned int silence_number;
 char alien_user[YSF_CALLSIGN_LENGTH+1];
 
 void CStreamer::GetFromNetwork(unsigned char *buffer, CYSFNetwork* rtpNetwork) {
 static unsigned char tmp[20];
+static unsigned char dch[20U];
 static bool first_time,beacon_running;
 std::string tmp_str;
-//static unsigned int last_num,act_num;
 CYSFPayload ysfPayload;
 	
 	// Only pass through YSF data packets
@@ -750,7 +774,6 @@ CYSFPayload ysfPayload;
 			m_conv.putDMREOT(true);
 			m_beacon_Watch.start();
 			m_beacon_status = BE_OFF;
-			m_open_channel=true;
 			beacon_running = true;
 		} else beacon_running = false;
 	
@@ -785,11 +808,46 @@ CYSFPayload ysfPayload;
 			// }		
 
 			//LogMessage("RX Packet gid=%d, fi=%d,dt=%d,fn=%d,ft=%d.",m_gid,fi,dt,fn,ft);										
-			if ((dt==YSF_DT_DATA_FR_MODE) || (dt==YSF_DT_VOICE_FR_MODE)) {
+			if (dt==YSF_DT_VD_MODE1) {	
+				if (fi==YSF_FI_HEADER) {
+					m_rcv_callsign = getSrcYSF_fromHeader(buffer);
+					m_gid = fich.getDGId();					
+					LogMessage("Received Voice Data Mode 1 *%s* from *%s*, gid=%d.",m_rcv_callsign.c_str(),m_netDst.c_str(),m_gid);
+					m_conv.putDMRHeaderV1();
+					first_time = true;
+					m_open_channel = true;				
+				} else if (fi==YSF_FI_COMMUNICATIONS) {
+					silence_number = 0;
+					// Test if late entry
+					if (m_open_channel==false) {
+						if (m_jitter_timer && m_jitter_timer->isRunning()) {
+							LogMessage("");
+						} else {
+							m_rcv_callsign = getSrcYSF_fromData(buffer);
+							m_gid = fich.getDGId();
+							LogMessage("Voice Data Mode 1 Late Entry from %s, gid=%d.",m_rcv_callsign.c_str(),m_gid);
+							m_conv.putDMRHeaderV1();
+							first_time = true;
+							m_open_channel = true;
+						}						
+					}
+					ysfPayload.readVDMode1Data(buffer + 35U, dch); 
+					m_conv.putVCHV1(buffer + 35U);
+					m_conv.putDCHV1(dch);
+				} else if (fi==YSF_FI_TERMINATOR) {
+					LogMessage("VOICE DATA MODE 1 EOT received");
+					m_conv.putDMREOTV1(true);  // changed from false
+					m_open_channel = true;
+				}
+			} else if ((dt==YSF_DT_DATA_FR_MODE) || (dt==YSF_DT_VOICE_FR_MODE)) {
 				// Data packets go direct to modem
-				rtpNetwork->write(buffer);	
+				if (dt==YSF_DT_VOICE_FR_MODE) {
+					if ((fi==YSF_FI_HEADER) || (fi==YSF_FI_COMMUNICATIONS)) m_not_busy=false;
+					else if (fi==YSF_FI_TERMINATOR) m_not_busy=true;
+				}
+				m_conv.putBulk(buffer);
+				m_open_channel = true;
 			} else if (dt==YSF_DT_VD_MODE2) {
-
 				if (fi==YSF_FI_HEADER) {
 					CYSFPayload payload;
 					
@@ -810,54 +868,54 @@ CYSFPayload ysfPayload;
 					unsigned char dch[20U];
 					if (payload.readVDMode1Data(buffer+35U,dch)) memcpy(ysf_radioid,dch+5U,5U);
 					else memcpy(ysf_radioid,std_ysf_radioid,5U);
-					memcpy(tmp,ysf_radioid,5U);
-					tmp[5U]=0;
-					LogMessage("Radio ID: %s",tmp);
-					m_not_busy=false;
+					// memcpy(tmp,ysf_radioid,5U);
+					// tmp[5U]=0;
+					//m_not_busy=false;
 					m_rcv_callsign = getSrcYSF_fromHeader(buffer);
-					m_gid = fich.getDGId();					
-					LogMessage("Received voice data *%s* from *%s*, gid=%d.",m_rcv_callsign.c_str(),m_netDst.c_str(),m_gid);
+					//m_gid = fich.getDGId();					
+					LogMessage("Received voice data *%s* from *%s*, gid=%d, rid=%5.5s.",m_rcv_callsign.c_str(),m_netDst.c_str(),m_gid,ysf_radioid);
 					if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-					else {
-						::memcpy(m_gps_buffer, dt1_temp, 10U);
-						::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
-					}
 					m_gid = fich.getDGId();
 					m_conv.putDMRHeader();
 					first_time = true;
-					m_open_channel=true;					
+					if (m_jitter_timer) m_jitter_timer->start();
+					else m_open_channel=true;					
 				} else if (fi==YSF_FI_COMMUNICATIONS) {
+					silence_number = 0;					
 					// Test if late entry
 					if (m_open_channel==false) {
-						if (m_tg_type == FCS) { if (fn==1) m_rcv_callsign=getSrcYSF_fromFN1(buffer);}
-						else m_rcv_callsign = getSrcYSF_fromData(buffer);
-						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-						else {
-							::memcpy(m_gps_buffer, dt1_temp, 10U);
-							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
-						}
-						m_gid = fich.getDGId();
-						LogMessage("Late Entry from %s, gid=%d.",m_rcv_callsign.c_str(),m_gid);
-						memcpy(ysf_radioid,std_ysf_radioid,5U);
-						strcpy(alien_user,"");
-						m_not_busy=false;
-						m_conv.putDMRHeader();
-						first_time = true;
-						m_open_channel=true;						
+						if (m_jitter_timer && m_jitter_timer->isRunning()) {
+							LogMessage("");
+						} else {
+							if (m_tg_type == FCS) { if (fn==1) m_rcv_callsign=getSrcYSF_fromFN1(buffer);}
+							else m_rcv_callsign = getSrcYSF_fromData(buffer);
+							if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
+							m_gid = fich.getDGId();
+							LogMessage("Late Entry from %s, gid=%d.",m_rcv_callsign.c_str(),m_gid);
+							memcpy(ysf_radioid,std_ysf_radioid,5U);
+							strcpy(alien_user,"");
+							//m_not_busy=false;
+							m_conv.putDMRHeader();
+							first_time = true;
+							if (m_jitter_timer) m_jitter_timer->start();
+							else m_open_channel=true;
+						}						
 					}
 
+					if (fn==1) m_rcv_callsign=getSrcYSF_fromFN1(buffer);
 					if (m_tg_type == YSF) {
-						tmp_str = getSrcYSF_fromData(buffer);
-						if (strcmp(alien_user,tmp_str.c_str()) == 0) {
+						if (strcmp(alien_user,m_rcv_callsign.c_str()) == 0) {
 							LogMessage("Voice Packet from alien user %s. Rejecting..",alien_user);
 							return;
 						}
 					}
 					
-					if (m_tg_type == FCS) { if (fn==1) m_rcv_callsign=getSrcYSF_fromFN1(buffer);}
-					else m_rcv_callsign = getSrcYSF_fromData(buffer); 			
+					// if (m_tg_type == FCS) { 
+
+					// 	}
+					// else m_rcv_callsign = getSrcYSF_fromData(buffer); 			
 					// Update gps info for ft=6
-					silence_number = 0;
+
 					if ((ft==6) && (fn==6)) {
 						//show info once
 						if (first_time) {
@@ -867,11 +925,7 @@ CYSFPayload ysfPayload;
 							first_time = false;
 						}
 						//update gps
-						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-						else {
-							::memcpy(m_gps_buffer, dt1_temp, 10U);
-							::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
-						}						
+						if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);						
 					}
 					// Update gps info for ft=7
 					if ((ft==7) && ((fn==6) || (fn==7))) {
@@ -883,34 +937,26 @@ CYSFPayload ysfPayload;
 									LogMessage("Radio: %s.",get_radio(*(tmp+4)));
 									first_time = false;	
 								}								
-								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-								else {
-									::memcpy(m_gps_buffer, dt1_temp, 10U);
-									::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);									
-								}							
+								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);							
 							} else {
 									if (first_time) {
 									LogMessage("Radio: %s.",get_radio(*(tmp+4)));
-									//first_time = false;	
 								}								
 
 							}
 													
 						} else {
-							if ((*(tmp + 5U) != 0x00) || (*(tmp + 2U) != 0x62)) {
+							if (((*(tmp + 4U) == 0x20) && (*(tmp + 2U) == 0x62))  || ((*(tmp + 5U) != 0x00) || (*(tmp + 2U) != 0x62))) {
 								memcpy(m_gps_buffer,tmp,10U);
 								ysfPayload.readVDMode2Data(buffer + 35U, m_gps_buffer + 10U);
 								if (first_time) {
 									CUtils::dump("GPS Real info found",m_gps_buffer,20U);
-									//LogMessage("Radio: %s.",get_radio(*(tmp+4)));
 									first_time = false;
 								}
-							} //else CUtils::dump("Fake info found",m_gps_buffer,20U);
+							}
 						}
 					}
 					m_conv.putVCH(buffer + 35U);
-					// m_open_channel=true;
-
 				} else if (fi==YSF_FI_TERMINATOR) {
 					tmp_str = getSrcYSF_fromHeader(buffer);
 					if (strcmp(alien_user,tmp_str.c_str()) == 0) {
@@ -919,7 +965,8 @@ CYSFPayload ysfPayload;
 					}
 					LogMessage("YSF EOT received");
 					m_conv.putDMREOT(true);  // changed from false
-					m_open_channel = true;
+					//if (m_open_channel == false) m_open_channel = true;
+					//if (m_jitter_timer && m_jitter_timer->isRunning()) m_open_channel = true;
 				}
 			}
 		} 
@@ -932,6 +979,7 @@ CYSFPayload ysfPayload;
 
 void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 	static bool start_silence = false;
+	static unsigned int total_silence=0;
 	unsigned int fn;
 	unsigned int ysfFrameType;
 	std::string tmp_callsign = m_callsign;
@@ -942,17 +990,30 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 		// Playback YSF
 		::memset(m_ysfFrame,0U,200U);
 		ysfFrameType = m_conv.getYSF(m_ysfFrame + 35U);
-	//	if (ysfFrameType != 4) LogMessage("frame type: %d",ysfFrameType);
-
-		if((ysfFrameType == TAG_HEADER) || (ysfFrameType == TAG_HEADERV1)) {
+		//if (ysfFrameType != 4) LogMessage("frame type: %d",ysfFrameType);
+		if (ysfFrameType == TAG_BULK) {		
+//			CUtils::dump(1U,"Bulk frame",m_ysfFrame,155U);
+			rptNetwork->write(m_ysfFrame);
+			CYSFFICH fich;
+			bool valid = fich.decode(m_ysfFrame + 35U);
+			if (valid && (fich.getFI() == YSF_FI_TERMINATOR)) {
+				//LogMessage("End of data playback.");
+				m_rpt_buffer.clear();
+				if (m_jitter_timer) m_jitter_timer->stop();				
+				m_open_channel=false;
+			}
+			m_ysfWatch.start();
+		} else if((ysfFrameType == TAG_HEADER) || (ysfFrameType == TAG_HEADERV1)) {
+			m_not_busy = false;				
 			if (ysfFrameType == TAG_HEADER) start_silence = true;
 			m_ysf_cnt = 0U;
-			silence_number=0;			
+			silence_number=0;		
+			total_silence = 0;
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_HEADER) {			
 				::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
-				::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			} 
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 			m_ysfFrame[34U] = 0U; // Net frame counter
@@ -980,7 +1041,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			if (ysfFrameType == TAG_HEADER) {
 				memset(csd1, '*', YSF_CALLSIGN_LENGTH/2);
 				memcpy(csd1 + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);			
-				memcpy(csd1 + YSF_CALLSIGN_LENGTH, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				memcpy(csd1 + YSF_CALLSIGN_LENGTH, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 				memset(csd2 , ' ', YSF_CALLSIGN_LENGTH + YSF_CALLSIGN_LENGTH);
 				payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
 			} else {
@@ -995,12 +1056,12 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_ysf_cnt++;
 			m_ysfWatch.start();
 		} else if (ysfFrameType == TAG_EOT || ysfFrameType == TAG_EOTV1) {
-			silence_number=0;
-
+			silence_number = 0;
+			total_silence = 0;
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_EOT) {
 				::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
-				::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			}
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 			m_ysfFrame[34U] = ((m_ysf_cnt & 0x7FU) <<1) | 0x01U; // Net frame counter
@@ -1028,7 +1089,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			if (ysfFrameType == TAG_EOT) {
 				memset(csd1, '*', YSF_CALLSIGN_LENGTH);
 				memcpy(csd1 + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);			
-				memcpy(csd1 + YSF_CALLSIGN_LENGTH, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				memcpy(csd1 + YSF_CALLSIGN_LENGTH, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 				memset(csd2 , ' ', YSF_CALLSIGN_LENGTH + YSF_CALLSIGN_LENGTH);
 				payload.writeHeader(m_ysfFrame + 35U, csd1, csd2);
 			} else {
@@ -1039,24 +1100,25 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 		//	LogMessage("EOT Playback");
 			rptNetwork->write(m_ysfFrame);
-
+			if (m_jitter_timer) m_jitter_timer->stop();
 			m_open_channel=false;
 			start_silence = false;
 			strcpy(alien_user,"");
-			m_rcv_callsign = std::string("");			
+			m_real_rcv_callsign = std::string("");
+			m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+			m_rcv_callsign = m_real_rcv_callsign;		
 			if (m_beacon_status != BE_OFF) m_beacon_status = BE_OFF;
-			m_not_busy = true;
 			m_inacBeaconTimer->start();
 			memcpy(ysf_radioid,std_ysf_radioid,5U);
 			m_conv.reset();	
-
+			m_not_busy = true;
 		} else if ((ysfFrameType == TAG_DATA) || (ysfFrameType == TAG_DATAV1)) {
 			fn = (m_ysf_cnt - 1U) % 8U;
-			
+			//LogMessage("call : *%s*",m_real_rcv_callsign.c_str());
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_DATA) {			
 				::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
-				::memcpy(m_ysfFrame + 14U, m_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			}
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
 
@@ -1074,7 +1136,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 							break;
 						case 1:
 							//Callsign
-							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_rcv_callsign.c_str());
+							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_real_rcv_callsign.c_str());
 							break;
 						case 5:					
 							if (ysf_radioid[0] != '*') {
@@ -1086,10 +1148,10 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 						case 6:
 							if ((m_tg_type == DMR) && (m_beacon_status == BE_OFF)) {
 								if (m_APRS != NULL) m_APRS->get_gps_buffer(m_gps_buffer,m_rcv_callsign);
-								else {
-									::memcpy(m_gps_buffer, dt1_temp, 10U);
-									::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
-								}
+								// else {
+								// 	::memcpy(m_gps_buffer, dt1_temp, 10U);
+								// 	::memcpy(m_gps_buffer + 10U, dt2_temp, 10U);
+								// }
 							}
 							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*) m_gps_buffer); 
 							break;
@@ -1099,11 +1161,14 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 						default:
 							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)"          ");
 					}
-			} else {
+			} else if (ysfFrameType == TAG_DATAV1) {
 					unsigned char dch[20U];
-					m_wiresX->getMode1DCH(dch,fn);
+					// If not DCH not send it
+					if (m_conv.getDCHV1(dch) != TAG_DCH) return;
+					//m_wiresX->getMode1DCH(dch,fn);
 					payload.writeVDMode1Data(m_ysfFrame + 35U, dch);
-					//CUtils::dump("Data VCH",dch,20U);
+					// LogMessage("Fn=%d",fn);
+					// CUtils::dump("Data DCH",dch,20U);
 			}
 
 			// Set the FICH
@@ -1133,11 +1198,15 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_ysfWatch.start();
 		} else {
 			if ((m_ysfWatch.elapsed() > 130U) && start_silence) {  // 180U
-					LogMessage("pipe_stalls, Inserting silence.");
-					m_conv.putDMRSilence();
+					if (total_silence < 10U) {
+						m_conv.putDMRSilence();
+						total_silence++;						
+						LogMessage("pipe_stalls, Inserting silence.");
+					}  
 					silence_number++;
-					if (silence_number>5) {
+					if (silence_number>500U) {
 						LogMessage("Too many silence, Signal lost.");
+						//m_open_channel=true;
 						m_conv.putDMREOT(true);
 					}
 				}
@@ -1209,10 +1278,12 @@ void CStreamer::DMR_get_Network(CDMRData tx_dmrdata, unsigned int ms) {
 				LogMessage("DMR audio received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
 				m_dmrinfo = true;
 				m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+				m_real_rcv_callsign = m_rcv_callsign;
 				m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
 				m_dmrFrames = 0U;
+				m_ysfWatch.start();
 				m_firstSync = false;
-				m_not_busy = false;
+				//m_not_busy = false;
 			}
 
 			if(DataType == DT_VOICE_SYNC)
@@ -1239,13 +1310,15 @@ void CStreamer::DMR_get_Network(CDMRData tx_dmrdata, unsigned int ms) {
 					}
 					LogMessage("DMR audio late entry received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
 					m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+					m_real_rcv_callsign = m_rcv_callsign;
 					m_netDst.resize(YSF_CALLSIGN_LENGTH, ' ');
 					m_dmrinfo = true;
+					m_ysfWatch.start();
 				}
 
 				m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
 				m_open_channel=true;
-				m_not_busy = false;
+				//m_not_busy = false;
 				m_dmrFrames++;
 			}
 		}
@@ -1258,7 +1331,7 @@ void CStreamer::DMR_get_Network(CDMRData tx_dmrdata, unsigned int ms) {
 				m_conv.putDMR(dmr_frame); // Add DMR frame for YSF conversion
 				m_dmrFrames++;
 				m_open_channel=true;
-				m_not_busy = false;
+				//m_not_busy = false;
 			}
 			
 			m_networkWatchdog.clock(ms);
@@ -1269,7 +1342,7 @@ void CStreamer::DMR_get_Network(CDMRData tx_dmrdata, unsigned int ms) {
 				m_networkWatchdog.stop();
 				m_dmrFrames = 0U;
 				m_dmrinfo = false;
-				m_not_busy = true;
+				//m_not_busy = true;
 			}
 		}
 	m_dmrLastDT = DataType;
@@ -1611,21 +1684,31 @@ std::string CStreamer::getSrcYSF_fromHeader(const unsigned char* buffer) {
 	unsigned int ret;
 	CYSFPayload ysfPayload;
 
-	ret = ysfPayload.readDataFRModeData2(buffer + 35U,dch);
+	//CUtils::dump(1U,"Header1",buffer,35U);
+	ret = ysfPayload.readVDMode1Data(buffer + 35U,dch);
 	if (ret) {
-		memcpy(tmp,dch,10U);
+		CUtils::dump(1U,"Header2",dch,20U);
+		memcpy(tmp,dch+10U,10U);
 		tmp[10U] = 0;
 		rcv_callsign = std::string(tmp);
-	}
-	if ((dch[0] == 0x20) && (m_tg_type == YSF)) {
+	} else if (m_tg_type == YSF) {
 		memcpy(tmp,buffer+14U,10U);
 		tmp[10U]=0;
-		rcv_callsign = std::string(tmp);
+		rcv_callsign = std::string(tmp);			
+	} else if (m_tg_type == FCS) {
+		memcpy(tmp,buffer+156U,8U);
+		tmp[8U]=0;
+		rcv_callsign = std::string(tmp);		
 	}
+	// if ((dch[0] == 0x20) && (m_tg_type == YSF)) {
+	// 	memcpy(tmp,buffer+14U,10U);
+	// 	tmp[10U]=0;
+	// 	rcv_callsign = std::string(tmp);
+	// }
 	
 	strcpy(tmp,rcv_callsign.c_str());
 	// LogMessage("Antes: %s",tmp);
-	unsigned int i=0;
+	unsigned int i=3;
 	while (i<strlen(tmp) && isalnum(tmp[i])) {
 		i++;
 	}
@@ -1635,10 +1718,17 @@ std::string CStreamer::getSrcYSF_fromHeader(const unsigned char* buffer) {
 	}
 	tmp[i+1]=0U;
 	rcv_callsign = std::string(tmp);
-	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");	
+	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
+	//  LogMessage("Despues: %s",tmp);	
+	//  LogMessage("Get from header: %s",rcv_callsign.c_str());	
+	m_real_rcv_callsign = rcv_callsign;	
+	if (isdigit(rcv_callsign.at(0))) {
+		rcv_callsign.erase(0,3);
+	}	
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
-	// LogMessage("Despues: %s",tmp);	
-	// LogMessage("Get from header: %s",rcv_callsign.c_str());	
+	m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');	
+//	LogMessage("Real Header1: %s",m_real_rcv_callsign.c_str());		
+//	LogMessage("Final Header1: %s",rcv_callsign.c_str());	
 	return rcv_callsign;
 }
 
@@ -1652,7 +1742,7 @@ std::string CStreamer::getSrcYSF_fromModem(const unsigned char* buffer) {
 	strcpy(tmp,rcv_callsign.c_str());
 //		LogMessage("Get from Data: %s",tmp);		
 //	LogMessage("Antes: %s",tmp);
-	unsigned int i=0;
+	unsigned int i=3;
 	while (i<strlen(tmp) && isalnum(tmp[i])) {
 		i++;
 	}
@@ -1663,7 +1753,15 @@ std::string CStreamer::getSrcYSF_fromModem(const unsigned char* buffer) {
 	tmp[i+1]=0U;		
 	rcv_callsign = std::string(tmp);
 	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
+	m_real_rcv_callsign = rcv_callsign;
+	if (isdigit(rcv_callsign.at(0))) {
+		rcv_callsign.erase(0,3);
+	}
+//	m_real_rcv_callsign = rcv_callsign;	
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+	m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');	
+	// LogMessage("Real Header1: %s",m_real_rcv_callsign.c_str());		
+	// LogMessage("Final Header1: %s",rcv_callsign.c_str());	
 //	LogMessage("Despues: %s",tmp);	
 	return rcv_callsign;
 }
@@ -1677,29 +1775,43 @@ std::string CStreamer::getSrcYSF_fromData(const unsigned char* buffer) {
 		tmp[10U]=0;
 		rcv_callsign = std::string(tmp);
 		strcpy(tmp,rcv_callsign.c_str());
+
+	} else if (m_tg_type == FCS) {
+		memcpy(tmp,buffer+156U,8U);
+		tmp[8U]=0;
+		rcv_callsign = std::string(tmp);		
+	} else return m_rcv_callsign;
+
 //		LogMessage("Get from Data: %s",tmp);		
 	//	LogMessage("Antes: %s",tmp);
-		unsigned int i=0;
-		while (i<strlen(tmp) && isalnum(tmp[i])) {
-			i++;
-		}
-		i--;
-		while ((i>0) && isdigit(tmp[i])) {
-			i--;
-		}
-		tmp[i+1]=0U;		
-		rcv_callsign = std::string(tmp);
+	unsigned int i=3;
+	while (i<strlen(tmp) && isalnum(tmp[i])) {
+		i++;
 	}
-	if (rcv_callsign.empty()) rcv_callsign = m_rcv_callsign;
+	i--;
+	while ((i>0) && isdigit(tmp[i])) {
+		i--;
+	}
+	tmp[i+1]=0U;		
+	rcv_callsign = std::string(tmp);
+
+	if (rcv_callsign.empty()) rcv_callsign = m_real_rcv_callsign;
 	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
+	m_real_rcv_callsign = rcv_callsign;
+	if (isdigit(rcv_callsign.at(0))) {
+		rcv_callsign.erase(0,3);
+	}
+//	m_real_rcv_callsign = rcv_callsign;		
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
-//	LogMessage("Despues: %s",tmp);	
+	m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');		
+//	LogMessage("Real Data: %s",m_real_rcv_callsign.c_str());		
+//	LogMessage("Final Data: %s",rcv_callsign.c_str());	
 	return rcv_callsign;
 }
 
 std::string CStreamer::getSrcYSF_fromFN1(const unsigned char* buffer) {	
 	std::string rcv_callsign("");
-	char tmp[11U];
+	char tmp[20U];
 	unsigned int ret;
 	CYSFPayload ysfPayload;
 	unsigned char dch[20U];
@@ -1710,22 +1822,48 @@ std::string CStreamer::getSrcYSF_fromFN1(const unsigned char* buffer) {
 		tmp[10U]=0;
 		rcv_callsign = std::string(tmp);
 		strcpy(tmp,rcv_callsign.c_str());
-//		LogMessage("Get from FN1: %s",tmp);
-		unsigned int i=0;
-		while (i<strlen(tmp) && isalnum(tmp[i])) {
-			i++;
+		if ((rcv_callsign.at(3) == '*') && (m_tg_type == YSF)) {
+			::strcpy(tmp,rcv_callsign.c_str());
+			tmp[3]=0;
+			::strncat(tmp,(char *)(buffer+14U),10U);
+			tmp[10U]=0;
+			rcv_callsign = std::string(tmp);			
+		} else if ((rcv_callsign.at(3) == '*') && (m_tg_type == FCS)) {
+			::strcpy(tmp,rcv_callsign.c_str());
+			tmp[3]=0;			
+			::strncat(tmp,(char *)(buffer+156U),10U);
+			tmp[10U]=0;
+			rcv_callsign = std::string(tmp);		
 		}
-		i--;
-		while ((i>0) && isdigit(tmp[i])) {
-			i--;
-		}
-		tmp[i+1]=0U;
-		rcv_callsign = std::string(tmp);
+	} else if (m_tg_type == YSF) {
+		memcpy(tmp,buffer+14U,10U);
+		tmp[10U]=0;
+		rcv_callsign = std::string(tmp);			
+	} else if (m_tg_type == FCS) {
+		memcpy(tmp,buffer+156U,8U);
+		tmp[8U]=0;
+		rcv_callsign = std::string(tmp);		
 	}
-	if (rcv_callsign.empty()) rcv_callsign = m_rcv_callsign;
+	unsigned int i=3U;
+	while (i<strlen(tmp) && isalnum(tmp[i])) {
+		i++;
+	}
+	i--;
+	while ((i>0) && isdigit(tmp[i])) {
+		i--;
+	}
+	tmp[i+1]=0U;
+	rcv_callsign = std::string(tmp);
+	if (rcv_callsign.empty()) rcv_callsign = m_real_rcv_callsign;
 	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
+	m_real_rcv_callsign = rcv_callsign;	
+	if (isdigit(rcv_callsign.at(0))) {
+		rcv_callsign.erase(0,3);
+	}	
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
-//	LogMessage("Despues: %s",tmp);	
+	m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+	// LogMessage("Real N1: *%s*",m_real_rcv_callsign.c_str());	
+	// LogMessage("Final N1: *%s*",rcv_callsign.c_str());	
 	return rcv_callsign;
 }
 
@@ -1757,32 +1895,33 @@ void CStreamer::processWiresX(const unsigned char* buffer, unsigned char fi, uns
 		}
 }
 
-void CStreamer::processDTMF(unsigned char* buffer, unsigned char dt)
-{
-	assert(buffer != NULL); 
+// void CStreamer::processDTMF(unsigned char* buffer, unsigned char dt)
+// {
+// 	assert(buffer != NULL); 
 
-	WX_STATUS status = WXS_NONE;
-	switch (dt) {
-	case YSF_DT_VD_MODE2:
-		status = m_dtmf->decodeVDMode2(buffer + 35U, (buffer[34U] & 0x01U) == 0x01U);
-		break;
-	default:
-		break;
-	}
+// 	WX_STATUS status = WXS_NONE;
+// 	switch (dt) {
+// 	case YSF_DT_VD_MODE2:
+// 		status = m_dtmf->decodeVDMode2(buffer + 35U, (buffer[34U] & 0x01U) == 0x01U);
+// 		break;
+// 	default:
+// 		break;
+// 	}
 
-	switch (status) {
-	case WXS_CONNECT: {
-			m_ysf_callsign = getSrcYSF_fromModem(buffer);
-			m_srcid = findYSFID(m_ysf_callsign, true);			
-			std::string id = m_dtmf->getReflector();
-			m_dstid = atoi(id.c_str());
-			//m_change_TG = true;			
-		}
-		break;
-		default:
-		break;
-	}			
-}
+// 	switch (status) {
+// 	case WXS_CONNECT: {
+// 			m_ysf_callsign = getSrcYSF_fromModem(buffer);
+// 			LogMessage("Callsign connect: %s",m_ysf_callsign.c_str());			
+// 			m_srcid = findYSFID(m_ysf_callsign, true);			
+// 			std::string id = m_dtmf->getReflector();
+// 			m_dstid = atoi(id.c_str());
+// 			m_wx_returned = WXS_CONNECT;					
+// 		}
+// 		break;
+// 		default:
+// 		break;
+// 	}			
+// }
 
 void CStreamer::SendFinalPTT() {
 	m_conv.putYSFHeader();

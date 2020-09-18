@@ -1031,6 +1031,15 @@ void CModeConv::putDMRSilence(void) {
 	}
 }
 
+void CModeConv::putBulk(unsigned char* data) {
+
+	assert (data != NULL);
+
+	m_YSF.addData(&TAG_BULK, 1U);
+	m_YSF.addData(data, 155U);
+	m_ysfN += 5U;
+}
+
 void CModeConv::putDMREOT(bool do_fill)
 {
 	unsigned char vch[13U];
@@ -1152,6 +1161,14 @@ unsigned int CModeConv::getYSF(unsigned char* data)
 	if (m_ysfN >= 1U) {
 		m_YSF.peek(tag, 1U);
 
+		if (tag[0U] == TAG_BULK) {
+			data -= 65U;
+			m_YSF.getData(tag, 1U);
+			m_YSF.getData(data, 155U);
+			m_ysfN -= 5U;
+			return TAG_BULK;			
+		}
+
 		if ((tag[0U] != TAG_DATA) && (tag[0U] != TAG_DATAV1)) {
 			m_YSF.getData(tag, 1U);
 			m_YSF.getData(data, 13U);
@@ -1229,6 +1246,40 @@ void CModeConv::putVCH(unsigned char * buffer) {
 	buffer += 18U;
 	m_ysfN += 1U;
 	}
+}
+
+void CModeConv::putVCHV1(unsigned char * buffer) {
+
+	buffer += YSF_SYNC_LENGTH_BYTES + YSF_FICH_LENGTH_BYTES;	
+    buffer += 9U;
+
+  for (unsigned int i=0; i < 5U; i++) {
+	m_YSF.addData(&TAG_DATAV1,1U);
+	m_YSF.addData(buffer,9U);
+	buffer += 18U;
+	m_ysfN += 1U;
+	}
+}
+
+void CModeConv::putDCHV1(unsigned char * buffer) {
+	m_YSF.addData(&TAG_DCH,1U);
+	m_YSF.addData(buffer,20U);
+}
+
+unsigned int CModeConv::getDCHV1(unsigned char * buffer) {
+	unsigned char tag[1U];
+
+	assert(buffer != NULL);
+
+	tag[0U] = TAG_NODATA;
+	if (m_YSF.isEmpty()) return tag[0U];
+	m_YSF.peek(tag, 1U);
+	
+	if (tag[0U] == TAG_DCH) {
+		m_YSF.getData(tag, 1U);
+		m_YSF.getData(buffer, 20U);
+	}
+	return tag[0U];
 }
 
 void CModeConv::reset(void){

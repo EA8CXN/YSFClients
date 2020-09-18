@@ -38,20 +38,24 @@ public:
 	void putDMRHeaderV1();
 	void putDMREOTV1(bool do_fill);	
 	void putDMRSilence(void);
+	void putDCHV1(unsigned char * buffer);
 
 	void putYSF_Mode1(const unsigned char* bytes, FILE *file);
 	void putYSF_Mode2(unsigned char* bytes, FILE *file);	
 	void putYSF(unsigned char* bytes);
+	void putBulk(unsigned char* bytes);	
 	void putDummyYSF();
 	void putYSFHeader();
 	void putYSFEOT();
 
 	unsigned int getYSF(unsigned char* bytes);
 	unsigned int getDMR(unsigned char* bytes);
+	unsigned int getDCHV1(unsigned char * buffer);
 
 	void AMB2YSF_Mode2(unsigned char * bytes);
 	void AMB2YSF_Mode1(unsigned char * bytes);	
     void putVCH(unsigned char * buffer);
+	void putVCHV1(unsigned char * buffer);
 	
 	void reset(void);
 

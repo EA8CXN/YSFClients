@@ -55,7 +55,7 @@ public:
 	unsigned char GetPictureSeq();
 	unsigned int GetSumCheck();
 	void PictureEnd(bool);
-    void VoiceEnd(unsigned int);
+    void VoiceEnd(unsigned int, unsigned char *gps_info);
 	
 private:
 	std::string 	m_callsign;
@@ -76,7 +76,7 @@ private:
 	void UpdateIndex(wiresx_record *);
 	FILE *getIndexFile(unsigned int *,bool);
 	unsigned int getNextIndex();
-	void ConvertGPS(char* data,char *output);
+	bool ConvertGPS(char* data, char *output);
 
 };
 

@@ -36,18 +36,18 @@ enum FCS_STATE {
 
 class CFCSNetwork {
 public:
-	CFCSNetwork(unsigned int port, const std::string& callsign, unsigned int rxFrequency, unsigned int txFrequency, const std::string& locator, unsigned int id, bool debug);
+	CFCSNetwork(unsigned int port, const std::string& callsign, unsigned int rxFrequency, unsigned int txFrequency, const std::string& locator, const std::string& name, unsigned int id, bool debug);	// KBC 2020-09-07
 	~CFCSNetwork();
 
 	bool open();
+
+	void setOptions(const std::string& options);
 
 	void clearDestination();
 
 	void write(const unsigned char* data);
 
 	bool writeLink(const std::string& reflector);
-
-	void setOptions(const std::string& options);	
 
 	void writeUnlink(unsigned int count = 1U);
 
@@ -62,10 +62,11 @@ private:
 	bool                           m_debug;
 	in_addr                        m_address;
 	unsigned char*                 m_ping;
-	unsigned char*                 m_options;	
+	unsigned char*                 m_options;
+	std::string                    m_opt;
 	unsigned char*                 m_info;
+	unsigned char*             m_info_long;
 	std::string                    m_reflector;
-	std::string                    m_opt;	
 	std::string                    m_print;
 	CRingBuffer<unsigned char>     m_buffer;
 	std::map<std::string, in_addr> m_addresses;
@@ -74,9 +75,10 @@ private:
 	CTimer                         m_resetTimer;
 	FCS_STATE                      m_state;
 
-	void writeInfo();
+	void writeOptions(const std::string& reflector);
+	void writeInfo(const std::string& reflector);
+	void writeInfoLong(const std::string& reflector);
 	void writePing();
-	void writeOptions();	
 };
 
 #endif

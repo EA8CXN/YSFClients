@@ -115,46 +115,46 @@ unsigned int CWiresXStorage::getNextIndex() {
 	return number;
 }
 
-void CWiresXStorage::ConvertGPS(char* data, char *output)
+bool CWiresXStorage::ConvertGPS(char* data, char *output)
 {
-	// for (unsigned int i = 5U; i < 11U; i++) {
-	// 	unsigned char b = *(data+i) & 0xF0U;
-	// 	if (b != 0x50U && b != 0x30U)
-	// 		return;                                // error/unknown
-	// }
+	 for (unsigned int i = 0U; i < 6U; i++) {
+	 	unsigned char b = *(data+i) & 0xF0U;
+	 	if (b != 0x50U && b != 0x30U)
+	 		return false;                                // error/unknown
+	 }
 
-	unsigned int tens = data[5U] & 0x0FU;
-	unsigned int units = data[6U] & 0x0FU;
+	unsigned int tens = data[0U] & 0x0FU;
+	unsigned int units = data[1U] & 0x0FU;
 	unsigned int lat_deg = (tens * 10U) + units;
 	if (tens > 9U || units > 9U || lat_deg > 89U)
-		return;                                // error/unknown
+		return false;                                // error/unknown
 
-	tens = data[7U] & 0x0FU;
-	units = data[8U] & 0x0FU;
+	tens = data[2U] & 0x0FU;
+	units = data[3U] & 0x0FU;
 	unsigned int lat_min = (tens * 10U) + units;
 	if (tens > 9U || units > 9U || lat_min > 59U)
-		return;                                // error/unknown
+		return false;                                // error/unknown
 
-	tens = data[9U] & 0x0FU;
-	units = data[10U] & 0x0FU;
+	tens = data[4U] & 0x0FU;
+	units = data[5U] & 0x0FU;
 	unsigned int lat_min_frac = (tens * 10U) + units;
 	if (tens > 9U || units > 10U || lat_min_frac > 99U)    // units > 10 ??? .. more buggy Yaesu firmware ?
-		return;                                // error/unknown
+		return false;                                // error/unknown
 
 	int lat_dir;
-	unsigned char b = data[8U] & 0xF0U;                            // currently a guess
+	unsigned char b = data[3U] & 0xF0U;                            // currently a guess
 	if (b == 0x50U)
 		lat_dir = 1;                           // N
 	else if (b == 0x30U)
 		lat_dir = -1;                          // S
 	else
-		return;                                // error/unknown
+		return false;                                // error/unknown
 
 	unsigned int lon_deg;
-	b = data[9U] & 0xF0U;
+	b = data[4U] & 0xF0U;
 	if (b == 0x50U) {
 	    // lon deg 0 to 9, and 100 to 179
-		b = data[11U];
+		b = data[6U];
 		if (b >= 0x76U && b <= 0x7FU)
 			lon_deg = b - 0x76U;               // 0 to 9
 		else if (b >= 0x6CU && b <= 0x75U)
@@ -162,42 +162,42 @@ void CWiresXStorage::ConvertGPS(char* data, char *output)
 		else if (b >= 0x26U && b <= 0x6BU)
 			lon_deg = 110U + (b - 0x26U);      // 110 to 179
 		else
-			return;                            // error/unknown
+			return false;                            // error/unknown
 	} else if (b == 0x30U) {
 	    // lon deg 10 to 99
-		b = data[11U];
+		b = data[6U];
 		if (b >= 0x26U && b <= 0x7FU)
 			lon_deg = 10U + (b - 0x26U);       // 10 to 99
 		else
-			return;                            // error/unknown
+			return false;                            // error/unknown
 	} else {
-		return;                                // error/unknown
+		return false;                                // error/unknown
 	}
 
 	unsigned int lon_min;
-	b = data[12U];
+	b = data[7U];
 	if (b >= 0x58U && b <= 0x61U)
 		lon_min = b - 0x58U;                   // 0 to 9
 	else if (b >= 0x26U && b <= 0x57U)
 		lon_min = 10U + (b - 0x26U);            // 10 to 59
 	else
-		return;                                // error/unknown
+		return false;                                // error/unknown
 
 	unsigned int lon_min_frac;
-	b = data[13U];
+	b = data[8U];
 	if (b >= 0x1CU && b <= 0x7FU)
 		lon_min_frac = b - 0x1CU;
 	else
-		return;                                // error/unknown
+		return false;                                // error/unknown
 
 	int lon_dir;
-	b = data[10U] & 0xF0U;
+	b = data[5U] & 0xF0U;
 	if (b == 0x30U)
 		lon_dir = 1;                           // E
 	else if (b == 0x50U)
 		lon_dir = -1;                          // W
 	else
-		return;                                // error/unknown
+		return false;                                // error/unknown
 
 	unsigned int lat_sec = lat_min_frac * 60U;
 	lat_sec = (lat_sec + (lat_sec % 100U)) / 100U;    // with rounding
@@ -207,14 +207,17 @@ void CWiresXStorage::ConvertGPS(char* data, char *output)
 
 	// >= 0 is north, < 0 is south
 	float latitude = lat_deg + ((lat_min + ((float)lat_min_frac * 0.01F)) * (1.0F / 60.0F));
-//	latitude *= lat_dir;
 
 	// >= 0 is east, < 0 is west
 	float longitude = lon_deg + ((lon_min + ((float)lon_min_frac * 0.01F)) * (1.0F / 60.0F));
-//	longitude *= lon_dir;
-	float dec_lon = (longitude - floor(longitude))*60;
-	float dec_lat = (latitude - floor(latitude))*60;
-	sprintf(output,"%c%3.2f%2.2f%c%3.2f%2.2f",(lat_dir>=0) ? 'N' : 'S',latitude,dec_lat,(lon_dir>=0) ? 'E' : 'W',longitude,dec_lon);
+	//LogMessage("Logitude: %f, Latitude: %f",longitude,latitude);
+	float dec_lon = (longitude - floor(longitude))*60.0F;
+	float dec_lat = (latitude - floor(latitude))*60.0F;
+	int lat = round((dec_lat - trunc(dec_lat))*100U)*100U;
+	int lon = round((dec_lon - trunc(dec_lon))*100U)*100U;
+		
+	sprintf(output,"%c%03d%02d%4d%c%03d%02d%4d",(lat_dir>=0) ? 'N' : 'S',int(latitude),int(dec_lat),lat,(lon_dir>=0) ? 'E' : 'W',int(longitude),int(dec_lon),lon);
+	return true;
 }
 
 void CWiresXStorage::UpdateIndex(wiresx_record* reg)
@@ -223,11 +226,8 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 	char record[180U];  // records are 83 bytes long
 	char index_str[MAX_PATH_NAME];
 	char tmp[6];
-//	char gps_pos[20];
-//	char destino[6];
-//	struct stat buffer;
+	char gps_pos[22U];
 	unsigned int number;
-//	int status;
 	
 	file = getIndexFile(&number,true);
 	m_number=number;
@@ -250,24 +250,16 @@ void CWiresXStorage::UpdateIndex(wiresx_record* reg)
 
 	if (reg->type[0]=='T') {
 		::sprintf(index_str,"%s/%05u.json",m_newspath.c_str(),number);	
-		file = fopen(index_str,"wt");		
+		file = fopen(index_str,"wt");
 		if (!file) {
 			LogMessage("Error writing message file: %s.",index_str);
 			return;
 		}
-		//strcpy(gps_pos,"none");
-		//ConvertGPS(reg->gps_pos,gps_pos);
+		if (!ConvertGPS(reg->gps_pos, gps_pos)) strcpy(gps_pos, "none");
 		fprintf(file,"{\n\"callsign\" : \"%.10s\"\n",reg->callsign);
 		fprintf(file,"\"date_send\" : \"%.12s\"\n",reg->time_send);
-		fprintf(file,"\"gps\" : \"%18.18s\"\n",reg->gps_pos);
+		fprintf(file,"\"gps\" : \"%20.20s\"\n",gps_pos);
 		fprintf(file,"\"text\" : \"%80.80s\"\n}\n",reg->text);
-
-		// ::memcpy(record,reg->callsign,10U);
-		// ::memcpy(record+10U,reg->time_send,12);	
-		// ::memcpy(record+22U,reg->gps_pos,18);
-		// ::memcpy(record+40U,reg->text,80);	
-		// record[120U]=0x0D;	
-		// fwrite(record,1,121U,file);
 		fclose(file);
 	}
 }
@@ -386,7 +378,7 @@ unsigned int CWiresXStorage::GetList(unsigned char *data, unsigned int type, uns
 	::memcpy((char*)(data+2U),source,5U);
 	::sprintf((char*)(data + 7U), "     %02u",count);
 	*(data+14U) = 0x0DU;	
-	CUtils::dump(1U,"List",data,155U);
+//	CUtils::dump(1U,"List",data,155U);
 	return offset;
 }	
 
@@ -406,7 +398,7 @@ void CWiresXStorage::StoreTextMessage(unsigned const char* data, unsigned const 
 		off=0;
 	}
 	::sprintf(reg->callsign,"%10.10s",source);
-	CUtils::dump(1U,"Text Message",data,200U);
+//	CUtils::dump(1U,"Text Message",data,200U);
 	//token
 	::memcpy(reg->token,data+off,6U);
 	//data1
@@ -416,11 +408,11 @@ void CWiresXStorage::StoreTextMessage(unsigned const char* data, unsigned const 
 	//reflector
 	::memcpy(reg->to,data+off+30U,5U);
 	//subject
+	::memset(reg->subject,0x20,16U);
 	::memcpy(reg->subject,data+off+35U,10U);
 	::sprintf(reg->type,"T01");
 	//text
 	::memcpy(reg->text,data+off+45U,80U);
-
 
 	UpdateIndex(reg);
 	delete reg;
@@ -430,22 +422,33 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 	FILE *file;
 	char file_name[MAX_PATH_NAME];
 	char tmp_buffer[180U];
-//	char index_str[MAX_PATH_NAME];
 	char record[83U];  // records are 83 bytes long	
 	char tmp[20U];
 	struct stat buffer;
 	unsigned int n,offset;
 	
+	file = getIndexFile(&n,false);
+	if (!file) {
+		LogMessage("Error getting index file.");
+		return 0U;
+	}
+	fseek(file,83U*(number-1),SEEK_SET);
+	n = fread(record,1,83U,file);
+	if (n<83U) {
+		fclose(file);
+		return 0U;
+	}
+	fclose(file);
+
 	::memcpy(tmp,source,5U);
 	tmp[5]=0;
 	::sprintf(file_name,"%s/%05u.JPG",m_newspath.c_str(),number);
-
 	if (stat (file_name, &buffer) < 0) {
 		::sprintf(file_name,"%s/%05u.AMB",m_newspath.c_str(),number);
 		if (stat (file_name, &buffer) < 0) {		
 			data[0]='T';
 			::sprintf(file_name,"%s/%05u.json",m_newspath.c_str(),number);
-			if ((file=fopen(file_name,"rb"))==0) {
+			if ((file=fopen(file_name,"rt"))==0) {
 				LogMessage("Error getting data file: %s",file_name);
 				return 0U;
 			}
@@ -464,28 +467,14 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 			//date
 			::memcpy((char*)(data+32U),tmp_buffer+43U,12U);
 			//gps
-			::memcpy((char*)(data+44U),tmp_buffer+66U,18U);
+			::memcpy((char*)(data+44U),record,18U);
 			//text
-			::memcpy((char*)(data+62U),tmp_buffer+96U,80U);									
-
-			CUtils::dump(1U,"Text Response",data,155U);
+			::memcpy((char*)(data+62U),tmp_buffer+98U,80U);
 			return 138U;
 			} 
 		else {
 			data[0]='V';
 			strcpy((char *)(data+1),file_name);
-			file = getIndexFile(&n,false);
-			if (!file) {
-				LogMessage("Error getting index file.");
-				return 0U;
-			}
-			fseek(file,83U*(number-1),SEEK_SET);
-			n = fread(record,1,83U,file);
-			if (n<83U) {
-				fclose(file);
-				return 0U;
-			}
-			fclose(file);
 			// callsign
 			offset = 138U;
 			memcpy(data+offset,record+56U,10U);
@@ -503,25 +492,10 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 		}			
 	} else {
 		data[0]='P';
-		
 		m_size=buffer.st_size;
-		file = getIndexFile(&n,false);
-		if (!file) {
-			LogMessage("Error getting index file.");
-			return 0U;
-		}
-		fseek(file,83U*(number-1),SEEK_SET);
-		n = fread(record,1,83U,file);
-		if (n<83U) {
-				fclose(file);
-				return 0U;
-			}
-		fclose(file);
-		
 		m_seq=0;
-        	char tmp1[3];
+		char tmp1[3];
 		strcpy(tmp1,"01");		
-		
 		::memcpy(data+5U,tmp1,2U);
 		//01
 		::memcpy(data+7U,tmp,5U);
@@ -543,7 +517,6 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 			LogMessage("Error getting data file: %s",file_name);
 			return 0U;
 		}
-		//return 79U;
 		return 74U;
 	}
 	return 0U;
@@ -552,10 +525,8 @@ unsigned int CWiresXStorage::GetMessage(unsigned char *data,unsigned int number,
 unsigned int CWiresXStorage::GetPictureHeader(unsigned char *data,unsigned int number, unsigned char *source) 
 {
 	FILE *file;
-//	char index_str[MAX_PATH_NAME];
 	char record[83U];  // records are 83 bytes long	
 	unsigned int n;
-//	char tmp[6];
 	char cab[7]={0x50,0x00,0x01,0x30,0x00,0x00,0x00};
 
 	m_sum_check=0;
@@ -580,10 +551,6 @@ unsigned int CWiresXStorage::GetPictureHeader(unsigned char *data,unsigned int n
 	::sprintf((char *)(data+32U),"20");
 	// TIME 1
 	::memcpy(data+34U,record+24U,12U);
-	// TALKY KEY
-	//char key[7]="HE5Gbv";
-
-	
 	// file name
 	::sprintf((char *)(data+52U),"%06u.jpg",0U);  //number 
 	::memcpy(data+46U,record+46,10U);
@@ -646,7 +613,7 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, const char *so
 
 	if (m_reg_voice) delete m_reg_voice;
 	m_reg_voice = new wiresx_record;
-	CUtils::dump(1U,"Voice data",data,200U);
+//	CUtils::dump(1U,"Voice data",data,200U);
 	// if (gps) {
 	// 	::memcpy(m_reg_voice->gps_pos,tmp_gps,18U);
 	// 	off=18U;
@@ -668,11 +635,7 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, const char *so
 
 	::memcpy(m_reg_voice->time_recv,temp,13U);
 	::memcpy(m_reg_voice->time_send,temp,13U);
-//	::memcpy(m_reg_voice->to,destino,6U);
 	::sprintf(m_reg_voice->subject,"Uploaded voice  ");
-	
-	//::memcpy(reg->subject,data+58U,10U);	
-	//::memcpy(reg->text,data+off+45U,80U);	
 
 	::sprintf(index_str,"%s/%05u.AMB",m_newspath.c_str(),number);
 	file_name =std::string(index_str);
@@ -680,10 +643,12 @@ std::string CWiresXStorage::StoreVoice(unsigned const char *data, const char *so
 	return file_name;
 }
 
-void CWiresXStorage::VoiceEnd(unsigned int size) {
+void CWiresXStorage::VoiceEnd(unsigned int size, unsigned char *gps_info) {
 	if (m_reg_voice) {
 		::LogMessage("Voice uploaded sucessfully.");		
 		::sprintf(m_reg_voice->type,"V%02u",((size/1000U)+1)%100);
+		::memset(m_reg_voice->gps_pos,0x20,18U);
+		::memcpy(m_reg_voice->gps_pos,gps_info + 5U,15U);
 		UpdateIndex(m_reg_voice);
 		delete m_reg_voice;
 		m_reg_voice = NULL;

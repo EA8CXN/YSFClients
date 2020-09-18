@@ -90,15 +90,15 @@ public:
 	bool start();
 	bool isBusy() const;
 
-	CReflector* getReflector() const;
+	std::string getReflector() const;
 	void setReflectors(CReflectors* reflectors);
-	void setReflector(CReflector* reflector, int dstID);
+	void setReflector(std::string reflector, int dstID);
 	void SendCReply(void);
 	void SendDReply(void);
 	void SendPReply(CYSFNetwork* ysfNetwork);
 	void SendRConnect(CYSFNetwork* ysfNetwork);
 	bool sendNetwork(void);
-	void getMode1DCH(unsigned char *dch,unsigned int fn);
+//	void getMode1DCH(unsigned char *dch,unsigned int fn);
 	std::string getCallsign();
 	
 	//void processConnect(CReflector* reflector);
@@ -115,7 +115,7 @@ private:
 	std::string     m_node;
 	CYSFNetwork*    m_network;
 	CReflectors*    m_reflectors;
-	CReflector*     m_reflector;
+	std::string     m_reflector;
 	std::string     m_id;
 	std::string     m_name;
 	unsigned char*  m_command;
@@ -144,7 +144,7 @@ private:
 	unsigned char 		 m_type;
 	unsigned int         m_number;
 	unsigned char        m_news_source[5];
-	std::string          m_source;
+	unsigned char        m_source[11];
 	unsigned char		 m_serial[6];
 	unsigned char 		 m_talky_key[5];
 	WXPIC_STATUS		 m_picture_state;
@@ -192,7 +192,7 @@ private:
 	void sendDisconnectReply();	
 	void sendAMBEMode1();
 
-	void createReply(const unsigned char* data, unsigned int length, const char* dst_callsign);
+	void createReply(const unsigned char* data, unsigned int length, const unsigned char* dst_callsign);
 	void writeData(const unsigned char* data);
 	unsigned char calculateFT(unsigned int length, unsigned int offset) const;
 	void makeConnect();	

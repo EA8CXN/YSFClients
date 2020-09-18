@@ -28,7 +28,7 @@
 #include "APRSReader.h"
 #include "GPS.h"
 #include "WiresX.h"
-#include "DTMF.h"
+//#include "DTMF.h"
 #include "Timer.h"
 #include "ModeConv.h"
 #include "YSFNetwork.h"
@@ -119,6 +119,7 @@ private:
     bool             m_open_channel;
 	CModeConv        m_conv;
 	std::string      m_rcv_callsign;
+    std::string      m_real_rcv_callsign;
 	unsigned char    m_gid;
 	bool  			 m_data_ready;
     bool             m_dmrNetworkEnabled;
@@ -134,7 +135,7 @@ private:
 	CDMRLookup*      m_lookup;	
     CWiresXStorage*  m_storage;
 	CWiresX*         m_wiresX;    
-	CDTMF*           m_dtmf;
+//	CDTMF*           m_dtmf;
     unsigned int     m_colorcode;
 	unsigned int     m_srcid;
 	unsigned int     m_defsrcid;
@@ -162,6 +163,7 @@ private:
     bool             m_NoChange;
     unsigned int     m_DGID;
     std::string      m_callsign;
+    CTimer *         m_jitter_timer;
 
     void BeaconLogic(void);
     bool containsOnlyASCII(const std::string& filePath);
@@ -176,7 +178,7 @@ private:
     std::string getSrcYSF_fromFN1(const unsigned char* buffer);
     std::string getSrcYSF_fromModem(const unsigned char* buffer);    
     unsigned int findYSFID(std::string cs, bool showdst);
-    void processDTMF(unsigned char* buffer, unsigned char dt);
+//    void processDTMF(unsigned char* buffer, unsigned char dt);
     void processWiresX(const unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);
 
 

@@ -27,6 +27,8 @@
 
 const unsigned int BUFFER_LENGTH = 200U;
 
+#define YSF_VERSION "YSFG-EA"
+
 CYSFNetwork::CYSFNetwork(const std::string& address, unsigned int port, const std::string& callsign, bool debug) :
 m_socket(address, port),
 m_debug(debug),
@@ -34,6 +36,7 @@ m_address(),
 m_port(0U),
 m_poll(NULL),
 m_options(NULL),
+m_info(NULL),
 m_unlink(NULL),
 m_buffer(1000U, "YSF Network Buffer"),
 m_pollTimer(1000U, 5U),
@@ -63,13 +66,14 @@ m_node()
 	m_room_id = 0;	
 }
 
-CYSFNetwork::CYSFNetwork(unsigned int port, const std::string& callsign, bool debug) :
+CYSFNetwork::CYSFNetwork(unsigned int port, const std::string& callsign, unsigned int rxFrequency, unsigned int txFrequency, const std::string& locator, const std::string& name, unsigned int id, bool debug) :
 m_socket(port),
 m_debug(debug),
 m_address(),
 m_port(0U),
 m_poll(NULL),
 m_options(NULL),
+m_info(NULL),
 m_unlink(NULL),
 m_buffer(1000U, "YSF Network Buffer"),
 m_pollTimer(1000U, 5U),
@@ -83,6 +87,9 @@ m_node()
 
 	// m_options = new unsigned char[50U];
 	// ::memcpy(m_options + 0U, "YSFO", 4U);	
+
+	m_info = new unsigned char[80U];
+	::sprintf((char*)m_info, "YSFI%-10.10s%9u%9u%-6.6s%-20.20s%-12.12s%7u ", callsign.c_str(), rxFrequency, txFrequency, locator.c_str(), name.c_str(), YSF_VERSION, id);
 
 	m_node = callsign;
 	m_node.resize(YSF_CALLSIGN_LENGTH, ' ');
@@ -100,6 +107,7 @@ m_node()
 CYSFNetwork::~CYSFNetwork()
 {
 	delete[] m_poll;
+	delete[] m_info;	
 	delete[] m_unlink;
 	if (m_options) delete[] m_options;
 }
@@ -225,18 +233,27 @@ void CYSFNetwork::clock(unsigned int ms)
 	if (::memcmp(buffer, "YSFP", 4U) == 0 && !m_linked) {
 		if (strcmp(m_name.c_str(),"MMDVM")== 0)
 			LogMessage("Link successful to %s", m_name.c_str());
-		else {
+		else 
 			LogMessage("Linked to %s", m_name.c_str());
+
+		m_linked = true;
 
 		if (m_options != NULL)
 			m_socket.write(m_options, 50U, m_address, m_port);
 
-		m_socket.write(m_getid, 4U, m_address, m_port);				
-		}
-		m_linked = true;
+		if (m_info != NULL)
+			m_socket.write(m_info, 80U, m_address, m_port);
 
-	
+		m_socket.write(m_getid, 4U, m_address, m_port);	
 	}
+
+	if (::memcmp(buffer, "YSFPONLINE", 10U) == 0 && m_linked) {
+		if (m_options != NULL)
+			m_socket.write(m_options, 50U, m_address, m_port);
+
+		if (m_info != NULL)
+			m_socket.write(m_info, 80U, m_address, m_port);
+	}	
 
 	if ((::memcmp(buffer, "YSFQ", 4U) == 0) && m_linked) {
 		buffer[length]=0;

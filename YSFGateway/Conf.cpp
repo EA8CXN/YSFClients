@@ -296,6 +296,8 @@ bool CConf::read()
 			m_NetworkReloadTime = (unsigned int)::atoi(value);		
 		else if (::strcmp(key, "NoChange") == 0)
 			m_networkNoChange = ::atoi(value) == 1;		
+		else if (::strcmp(key, "Jitter") == 0)
+			m_jitter = ::atoi(value);
 	} else if (section == SECTION_YSF_NETWORK) {
 		if (::strcmp(key, "Enable") == 0)
 			m_ysfNetworkEnabled = ::atoi(value) == 1;
@@ -339,7 +341,7 @@ bool CConf::read()
 		else if (::strcmp(key, "Startup") == 0)
 			m_fcsStartup = (unsigned int)::atoi(value);
 		else if (::strcmp(key, "Options") == 0)
-			m_ysfNetworkOptions = value;							
+			m_fcsNetworkOptions = value;							
 		else if (::strcmp(key, "Rooms") == 0)
 			m_fcsNetworkFile = value;
 		else if (::strcmp(key, "Port") == 0)
@@ -851,4 +853,9 @@ std::string CConf::getYSFNetworkOptions() const
 std::string CConf::getFCSNetworkOptions() const
 {
 	return m_fcsNetworkOptions;
+}
+
+unsigned int CConf::getJitter() const
+{
+	return m_jitter;
 }
