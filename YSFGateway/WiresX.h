@@ -194,7 +194,7 @@ private:
 
 	void createReply(const unsigned char* data, unsigned int length, const unsigned char* dst_callsign);
 	void writeData(const unsigned char* data);
-	unsigned char calculateFT(unsigned int length, unsigned int offset) const;
+	unsigned char calculateFT(unsigned int length, unsigned int offset, unsigned int bn) const;
 	void makeConnect();	
 	void makePacket(CYSFNetwork* ysfNetwork, unsigned char *data, unsigned int length);
 	void makeEndPicture(void);

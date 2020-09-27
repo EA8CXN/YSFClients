@@ -979,7 +979,6 @@ CYSFPayload ysfPayload;
 
 void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 	static bool start_silence = false;
-	static unsigned int total_silence=0;
 	unsigned int fn;
 	unsigned int ysfFrameType;
 	std::string tmp_callsign = m_callsign;
@@ -1008,7 +1007,6 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			if (ysfFrameType == TAG_HEADER) start_silence = true;
 			m_ysf_cnt = 0U;
 			silence_number=0;		
-			total_silence = 0;
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_HEADER) {			
@@ -1057,7 +1055,6 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_ysfWatch.start();
 		} else if (ysfFrameType == TAG_EOT || ysfFrameType == TAG_EOTV1) {
 			silence_number = 0;
-			total_silence = 0;
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_EOT) {
 				::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
@@ -1113,6 +1110,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_conv.reset();	
 			m_not_busy = true;
 		} else if ((ysfFrameType == TAG_DATA) || (ysfFrameType == TAG_DATAV1)) {
+			silence_number=0;
 			fn = (m_ysf_cnt - 1U) % 8U;
 			//LogMessage("call : *%s*",m_real_rcv_callsign.c_str());
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
@@ -1198,14 +1196,16 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_ysfWatch.start();
 		} else {
 			if ((m_ysfWatch.elapsed() > 130U) && start_silence) {  // 180U
-					if (total_silence < 10U) {
-						m_conv.putDMRSilence();
-						total_silence++;						
-						LogMessage("pipe_stalls, Inserting silence.");
-					}  
+					// if (total_silence < 5U) {
+					// 	m_conv.putDMRSilence();
+					// 	total_silence++;						
+					// 	LogMessage("pipe_stalls, Inserting silence.");
+					// 	//silence_limit=5U;
+					// } else silence_limit=100U;
 					silence_number++;
-					if (silence_number>500U) {
-						LogMessage("Too many silence, Signal lost.");
+				//	LogMessage("Silence number: %d",silence_number);
+					if (silence_number>60U) {
+						LogMessage("Signal lost. Sending EOT.");
 						//m_open_channel=true;
 						m_conv.putDMREOT(true);
 					}
@@ -1687,7 +1687,7 @@ std::string CStreamer::getSrcYSF_fromHeader(const unsigned char* buffer) {
 	//CUtils::dump(1U,"Header1",buffer,35U);
 	ret = ysfPayload.readVDMode1Data(buffer + 35U,dch);
 	if (ret) {
-		CUtils::dump(1U,"Header2",dch,20U);
+	//	CUtils::dump(1U,"Header2",dch,20U);
 		memcpy(tmp,dch+10U,10U);
 		tmp[10U] = 0;
 		rcv_callsign = std::string(tmp);

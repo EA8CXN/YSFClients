@@ -949,37 +949,24 @@ void CWiresX::createReply(const unsigned char* data, unsigned int length, const 
 	assert(data != NULL);
 	assert(length > 0U);
 
-//	bool isYSF2XX = true;
-
-	// If we don't explicitly pass a network, use the default one.
-/*	if (network == NULL) {
-		isYSF2XX = false;
-		network = m_network;
-	} */
-
-//	LogMessage("Original Length = %d",length);	
-
 	unsigned char bt = 0U;
 
 	if (length > 260U) {
 		bt = 1U;
 		bt += (length - 260U) / 259U;
-
-		length += bt;
-	}
-//	LogMessage("BT = %d",bt);
-
-	if (length > 20U) {
-		unsigned int blocks = (length - 20U) / 40U;
-		if ((length % 40U) > 0U) blocks++;
-	//	LogMessage("Blocks = %d",blocks);	
-		length = blocks * 40U + 20U;
-		if (length > 260U) length -= bt * 20U;		
-	} else {
-		length = 20U;
 	}
 
-	unsigned char ft = calculateFT(length, 0U);
+	// if (length > 20U) {
+	// 	unsigned int blocks = (length - 20U) / 40U;
+	// 	if ((length % 40U) > 0U) blocks++;
+	// //	LogMessage("Blocks = %d",blocks);	
+	// 	length = blocks * 40U + 20U;
+	// 	if (length > 260U) length -= bt * 20U;		
+	// } else {
+	// 	length = 20U;
+	// }
+
+	unsigned char ft = calculateFT(length, 0U, 0U);
 
 	unsigned char seqNo = 0U;
 
@@ -1012,15 +999,12 @@ void CWiresX::createReply(const unsigned char* data, unsigned int length, const 
 
 	unsigned char fn = 0U;
 	unsigned char bn = 0U;
-//	LogMessage("Init Length = %d",length);
 	unsigned int offset = 0U;
-	unsigned int iter = 0;
-	while (offset < length) {	
-//		LogMessage("Offset at iteration %d = %d",iter,offset);
-		iter++;	
+
+	while (offset < length) {		
 		switch (fn) {
 		case 0U: {
-				ft = calculateFT(length, offset);
+				ft = calculateFT(length, offset, bn);
 				payload.writeDataFRModeData1(m_csd1, buffer + 35U);
 				payload.writeDataFRModeData2(m_csd2, buffer + 35U);
 			}
@@ -1089,9 +1073,11 @@ void CWiresX::writeData(const unsigned char* buffer)
 	//m_network->write(buffer);
 }
 
-unsigned char CWiresX::calculateFT(unsigned int length, unsigned int offset) const
+unsigned char CWiresX::calculateFT(unsigned int length, unsigned int offset, unsigned int bn) const
 {
-	length -= offset;
+	unsigned int tmp = length - offset;
+
+	tmp -= bn;
 
 	if (length > 220U) return 7U;
 
