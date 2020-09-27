@@ -450,7 +450,7 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 				m_sendNetwork = false;
 				act_ref=m_command[7U];
 				if ((last_ref+1)!=act_ref) {
-					LogMessage("Out of order picture block: %d!=%d.",last_ref,act_ref);
+					LogMessage("Out of order picture block: %d!=%d.",last_ref+1,act_ref);
 					error_upload= true;
 				}
 			}	
@@ -459,7 +459,7 @@ WX_STATUS CWiresX::process(const unsigned char* data, const unsigned char* sourc
 			if (m_end_picture) return WXS_NONE;
 			act_ref=m_command[7U];
 			if ((last_ref+1)!=act_ref) {
-				LogMessage("Out of order picture block: %d!=%d.",last_ref,act_ref);
+				LogMessage("Out of order picture block: %d!=%d.",last_ref+1,act_ref);
 				error_upload= true;
 			}
 			last_ref=act_ref;
@@ -956,16 +956,6 @@ void CWiresX::createReply(const unsigned char* data, unsigned int length, const 
 		bt += (length - 260U) / 259U;
 	}
 
-	// if (length > 20U) {
-	// 	unsigned int blocks = (length - 20U) / 40U;
-	// 	if ((length % 40U) > 0U) blocks++;
-	// //	LogMessage("Blocks = %d",blocks);	
-	// 	length = blocks * 40U + 20U;
-	// 	if (length > 260U) length -= bt * 20U;		
-	// } else {
-	// 	length = 20U;
-	// }
-
 	unsigned char ft = calculateFT(length, 0U, 0U);
 
 	unsigned char seqNo = 0U;
@@ -1077,7 +1067,7 @@ unsigned char CWiresX::calculateFT(unsigned int length, unsigned int offset, uns
 {
 	unsigned int tmp = length - offset;
 
-	tmp -= bn;
+	if (bn > 0) tmp++;
 
 	if (length > 220U) return 7U;
 
