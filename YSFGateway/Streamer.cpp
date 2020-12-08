@@ -903,12 +903,12 @@ CYSFPayload ysfPayload;
 					}
 
 					if (fn==1) m_rcv_callsign=getSrcYSF_fromFN1(buffer);
-					if (m_tg_type == YSF) {
-						if (strcmp(alien_user,m_rcv_callsign.c_str()) == 0) {
-							LogMessage("Voice Packet from alien user %s. Rejecting..",alien_user);
-							return;
-						}
-					}
+					// if (m_tg_type == YSF) {
+					// 	if (strcmp(alien_user,m_rcv_callsign.c_str()) == 0) {
+					// 		LogMessage("Voice Packet from alien user %s. Rejecting..",alien_user);
+					// 		return;
+					// 	}
+					// }
 					
 					// if (m_tg_type == FCS) { 
 
@@ -964,7 +964,10 @@ CYSFPayload ysfPayload;
 						return;
 					}
 					LogMessage("YSF EOT received");
+					// Insert queue reset
+					m_conv.reset();
 					m_conv.putDMREOT(true);  // changed from false
+					if (m_jitter_timer) m_jitter_timer->start();
 					//if (m_open_channel == false) m_open_channel = true;
 					//if (m_jitter_timer && m_jitter_timer->isRunning()) m_open_channel = true;
 				}
@@ -1110,7 +1113,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_conv.reset();	
 			m_not_busy = true;
 		} else if ((ysfFrameType == TAG_DATA) || (ysfFrameType == TAG_DATAV1)) {
-			silence_number=0;
+			//silence_number=0;
 			fn = (m_ysf_cnt - 1U) % 8U;
 			//LogMessage("call : *%s*",m_real_rcv_callsign.c_str());
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
@@ -1195,18 +1198,12 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_ysf_cnt++;
 			m_ysfWatch.start();
 		} else {
-			if ((m_ysfWatch.elapsed() > 130U) && start_silence) {  // 180U
-					// if (total_silence < 5U) {
-					// 	m_conv.putDMRSilence();
-					// 	total_silence++;						
-					// 	LogMessage("pipe_stalls, Inserting silence.");
-					// 	//silence_limit=5U;
-					// } else silence_limit=100U;
+			if ((m_ysfWatch.elapsed() > 180U) && start_silence) {  // 180U
+					m_conv.putDMRSilence();
 					silence_number++;
-				//	LogMessage("Silence number: %d",silence_number);
-					if (silence_number>60U) {
+					LogMessage("Inserting Silence number: %d",silence_number);
+					if (silence_number>5U) {
 						LogMessage("Signal lost. Sending EOT.");
-						//m_open_channel=true;
 						m_conv.putDMREOT(true);
 					}
 				}
