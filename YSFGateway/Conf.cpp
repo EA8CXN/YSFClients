@@ -20,6 +20,7 @@
 
 #include "Conf.h"
 #include "Log.h"
+#include "Reflectors.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -585,11 +586,11 @@ unsigned int CConf::getP25Startup() const
 
 unsigned int CConf::getNetworkTypeStartup() const
 {
-	if (::strcmp(m_networkTypeStartup.c_str(),"YSF")==0) return 1U;
-	else if (::strcmp(m_networkTypeStartup.c_str(),"FCS")==0) return 2U;
-	else if (::strcmp(m_networkTypeStartup.c_str(),"DMR")==0) return 3U;
-	else if (::strcmp(m_networkTypeStartup.c_str(),"P25")==0) return 4U;
-	else if (::strcmp(m_networkTypeStartup.c_str(),"NXDN")==0) return 5U;
+	if (::strcmp(m_networkTypeStartup.c_str(),"YSF")==0) return YSF;
+	else if (::strcmp(m_networkTypeStartup.c_str(),"FCS")==0) return FCS;
+	else if (::strcmp(m_networkTypeStartup.c_str(),"DMR")==0) return DMR;
+	else if (::strcmp(m_networkTypeStartup.c_str(),"P25")==0) return P25;
+	else if (::strcmp(m_networkTypeStartup.c_str(),"NXDN")==0) return NXDN;
 	else return 0U;
 }
 

@@ -25,7 +25,7 @@
 #include <cassert>
 #include <cstring>
 
-const char* FCS_VERSION = "MMDVM";
+const char* FCS_VERSION = "YSFG-EA";
 
 const unsigned int BUFFER_LENGTH = 200U;
 
@@ -76,9 +76,10 @@ CFCSNetwork::~CFCSNetwork()
 
 bool CFCSNetwork::open()
 {
+
 	LogMessage("Resolving FCS999 addresses");
 
-	m_addresses["FCS900"] = CUDPSocket::lookup("fcs900.xreflector.net");
+	m_addresses["FCS999"] = CUDPSocket::lookup("fcs999.xreflector.net");
 	
 	LogMessage("Opening FCS network connection");
 
@@ -283,7 +284,7 @@ void CFCSNetwork::writeInfoLong(const std::string& reflector)
 	if (m_state != FCS_LINKED)
 		return;
 
-	::memcpy(m_info_long + 4U, (reflector.substr(0,6)+reflector.substr(7,2)).c_str(), 8U);
+//	::memcpy(m_info_long + 4U, (reflector.substr(0,6)+reflector.substr(7,2)).c_str(), 8U);
 
 	if (m_debug)
 		CUtils::dump(1U, "FCS Network Data Sent long", m_info_long, 100U);

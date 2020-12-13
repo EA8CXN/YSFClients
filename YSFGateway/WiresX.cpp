@@ -197,7 +197,7 @@ void CWiresX::setInfo(const std::string& name, unsigned int txFrequency, unsigne
 {
 	assert(txFrequency > 0U);
 	assert(rxFrequency > 0U);
-
+	
 	m_name        = name;
 	m_txFrequency = txFrequency;
 	m_rxFrequency = rxFrequency;

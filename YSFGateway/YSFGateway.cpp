@@ -162,6 +162,28 @@ CYSFGateway::~CYSFGateway()
 
 }
 
+int get_ysfid(std::string name) {
+	unsigned int hash = 0U;
+
+	for (unsigned int i = 0U; i < name.size(); i++) {
+		hash += name.at(i);
+		hash += (hash << 10);
+		hash ^= (hash >> 6);
+	}
+
+	// Final avalanche
+	hash += (hash << 3);
+	hash ^= (hash >> 11);
+	hash += (hash << 15);
+
+	char id[10U];
+	::sprintf(id, "%05u", hash % 100000U);
+
+	LogInfo("The ID of this repeater is %s", id);
+
+	return hash % 100000U;
+}
+
 bool first_time_ysf_dgid = true;
 
 int CYSFGateway::run()
@@ -304,7 +326,9 @@ int CYSFGateway::run()
 	unsigned int txFrequency = m_conf.getTxFrequency();
 	unsigned int rxFrequency = m_conf.getRxFrequency();
 	std::string locator = calculateLocator();
-	unsigned int id = m_conf.getId();
+	//unsigned int id = m_conf.getId();
+
+	unsigned int ysf_id = get_ysfid(m_callsign);
 
 	CYSFNetwork rptNetwork(myAddress, myPort, m_callsign, debug);
 	rptNetwork.setDestination("MMDVM", rptAddress, rptPort);
@@ -319,8 +343,7 @@ int CYSFGateway::run()
 	if (ysfNetworkEnabled) {
 		unsigned int ysfPort = m_conf.getYSFNetworkPort();
 
-		m_ysfNetwork = new CYSFNetwork(ysfPort,  m_callsign, rxFrequency, txFrequency, locator, m_conf.getName(), id, debug);
-//		m_ysfNetwork = new CYSFNetwork(ysfPort,  m_callsign, debug);			
+		m_ysfNetwork = new CYSFNetwork(ysfPort,  m_callsign, rxFrequency, txFrequency, locator, m_conf.getLocation(), ysf_id, debug);			
 		ret = m_ysfNetwork->open();
 		if (!ret) {
 			::LogError("Cannot open the YSF reflector network port");
@@ -332,7 +355,7 @@ int CYSFGateway::run()
 	if (m_fcsNetworkEnabled) {
 		unsigned int fcsPort = m_conf.getFCSNetworkPort();
 
-		m_fcsNetwork = new CFCSNetwork(fcsPort, m_callsign, rxFrequency, txFrequency, locator, m_conf.getName(), id, debug);
+		m_fcsNetwork = new CFCSNetwork(fcsPort, m_callsign, rxFrequency, txFrequency, locator, m_conf.getLocation(), ysf_id, debug);
 		ret = m_fcsNetwork->open();
 		if (!ret) {
 			::LogError("Cannot open the FCS reflector network port");
@@ -694,7 +717,7 @@ bool CYSFGateway::startupLinking()
 	CReflector* reflector;
 	unsigned int dstId;
 
-	//LogMessage("Entrado en startup");
+	LogMessage("Entrado en startup: %d",tmp_id);
 	
 	switch(tmp_id) {
 		case NONE:
@@ -727,9 +750,9 @@ bool CYSFGateway::startupLinking()
 		}
 		break;
 	}
-	//LogMessage("Antes de Fijar reflectores en startup");
+	LogMessage("Antes de Fijar reflectores en startup");
 	m_wiresX->setReflectors(m_actual_ref);
-	//LogMessage("Fijado reflectores en startup");
+	LogMessage("Fijado reflectores en startup");
 	m_tg_type = (TG_TYPE) tmp_id;
 	m_Streamer->put_tgType(m_tg_type);
 
@@ -756,17 +779,17 @@ bool CYSFGateway::startupLinking()
 			m_last_DMR_TG = dstId; 
 			m_dmrNetwork->enable(true);
 		} else {
-				//LogMessage("listo para buscar reflector en startup");
+				LogMessage("listo para buscar reflector en startup");
 			if (is_number(m_startup)) reflector = m_actual_ref->findById(m_startup);
 			else reflector = m_actual_ref->findByName(m_startup);	
-				//LogMessage("Encontrado reflector en startup");	
+				LogMessage("Encontrado reflector en startup");	
 			if (reflector != NULL) dstId = atoi(reflector->m_id.c_str());
 			else {
 				LogMessage("Unknown reflector - %s", m_startup.c_str());	
 				return false;
 			}
 		}
-			//LogMessage("Antes de llamar a TGCOnnect en startup");	
+			LogMessage("Antes de llamar a TGCOnnect en startup");	
 		if (TG_Connect(dstId)) {
 			LogMessage("Automatic (re-)connection to %5.5s - \"%s\"", reflector->m_id.c_str(), reflector->m_name.c_str());
 			m_original = dstId;
@@ -905,7 +928,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 		case FCS:		
 			if (m_fcsNetwork != NULL) {
 				m_lostTimer.stop();				
-				//LogMessage("Conecting to FCS  %s.",dst_str_ID.c_str());
+				LogMessage("Conecting to FCS  %s.",dst_str_ID.c_str());
 				reflector = m_fcsReflectors->findById(dst_str_ID);
 				if (reflector != NULL) {
 					// Close connection
@@ -916,7 +939,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 						m_fcsNetwork->writeUnlink(3U);
 						m_fcsNetwork->clearDestination();
 					}	
-					sprintf(tmp,"FCS%05d",atoi(reflector->m_id.c_str()));				
+					sprintf(tmp,"FCS%05d",atoi(reflector->m_id.c_str()));
+					LogMessage("FCS Reflector: %s",tmp);				
 					bool ok = m_fcsNetwork->writeLink(std::string(tmp));
 					m_fcsNetwork->setOptions(m_fcsoptions);	
 					if (ok) {

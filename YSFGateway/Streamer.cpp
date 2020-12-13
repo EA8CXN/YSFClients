@@ -398,7 +398,7 @@ CWiresX* CStreamer::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::s
 	m_wiresX = new CWiresX(m_storage, callsign, location, rptNetwork, makeUpper, &m_conv);
 //	m_dtmf = new CDTMF();
 	
-	std::string name = m_conf->getName();
+	std::string name = m_conf->getCallsign();
 
 	unsigned int txFrequency = m_conf->getTxFrequency();
 	unsigned int rxFrequency = m_conf->getRxFrequency();
