@@ -645,24 +645,21 @@ bool CWiresX::processNews(const unsigned char* source, const unsigned char* data
 
 bool CWiresX::processListDown(const unsigned char* source, const unsigned char* data)
 {
-	char buffer[4U];	
+	char buffer[4U];
 
-	
+
 	if (NewsForMe(data,0U)) {
 		m_busy = true;
 		m_busyTimer.start();
 
 		m_type = *(data+10U);
-		::memcpy(buffer, data + 17U, 2U);
+		::memcpy(buffer, data + 16U, 2U);
 		buffer[2U] = 0x00U;
 		m_start = ::atoi(buffer);
-		if (m_start > 0U)
-			m_start = (m_start-1)/2;
 
-		::LogMessage("Received Download resource list item (%u) from  \"%05d\", type %c from %10.10s", m_start, m_last_news, m_type, source);	
-
+		LogMessage("Received Download resource list item (%u) from \"%05d\", type %c from %10.10s",m_start, m_last_news, m_type, source);
 		m_status = WXSI_LIST;
-		m_timer.start();		
+		m_timer.start();
 		return false;
 	}
 	else return true;

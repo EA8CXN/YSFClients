@@ -335,37 +335,43 @@ void CWiresXStorage::AddPictureData(const unsigned char *data, unsigned int size
 unsigned int CWiresXStorage::GetList(unsigned char *data, unsigned int type, unsigned char *source, unsigned int start)
 { 
 	FILE *file;
-//	char index_str[MAX_PATH_NAME];	
 	char record[83U];  // records are 83 bytes long
 	char f_type[3U];
-	unsigned int items,n,offset,count,number;
+	char tmp[10];
+	unsigned int file_no,items,n,offset,count,number;
 
 	items=0;count=0;
 	offset=15U;
-	
+
 	::sprintf((char*)data, "%02u", items+1U);
-	::memcpy((char*)(data+2U),source,5U);	
+	::memcpy((char*)(data+2U),source,5U);
 	::sprintf((char*)(data+7U), "     %02u",items);
 	*(data+14U) = 0x0DU;
-	
+
 	file = getIndexFile(&number,false);
 	if (!file) {
 		LogMessage("Error getting index file");
 		return offset;
 	}
 
-	do {		
+	do {
 		n = fread(record,1,83U,file);
-		
+
 		if (n<83U) break;
 		// get type
 		::memcpy(f_type,record+41U,3U);
+
+		strncpy(tmp,record+36U,5U);
+		tmp[5U]=0;
+		file_no=atoi(tmp);
+		//LogMessage("Reading %d record",file_no);
+
 		if (((f_type[0]=='T') && (type=='1')) ||
 		    ((f_type[0]=='P') && (type=='2')) ||
 	        ((f_type[0]=='V') && (type=='3')) ||
 			((f_type[0]=='E') && (type=='4'))) {
-				if ((items>=start) && (count<20U)) {					
-					::memcpy(data+offset,record+36U,47U);				
+				if ((file_no>start) && (count<20U)) {
+					::memcpy(data+offset,record+36U,47U);
 					offset+=47U;
 					count++;
 				}
