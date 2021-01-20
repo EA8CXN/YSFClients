@@ -94,23 +94,23 @@ bool CReflectors::load()
 				char* p4 = ::strtok(NULL, ";\r\n");
 				char* p5 = ::strtok(NULL, ";\r\n");
 				char* p6 = ::strtok(NULL, ";\r\n");
-				
+
 				if (p1 != NULL && p2 != NULL && p3 != NULL && p4 != NULL && p5 != NULL && p6 != NULL) {
 					std::string host = std::string(p4);
 
 					in_addr address = CUDPSocket::lookup(host);
 					if (address.s_addr != INADDR_NONE) {
 						CReflector* refl = new CReflector;
-						unsigned int tmp = atoi(p1);	
-						
-						refl->m_id 		= std::to_string(tmp);
+						unsigned int tmp = atoi(p1);
+
+						refl->m_id 	= std::to_string(tmp);
 						refl->m_name    = std::string(p2);
 						refl->m_desc    = std::string(p3);
 						refl->m_address = address;
 						refl->m_port    = (unsigned int)::atoi(p5);
 						refl->m_count   = std::string(p6);
 						refl->m_type    = YSF;
-						refl->m_opt 	= 0;						
+						refl->m_opt 	= 0;
 						refl->m_name.resize(16U, ' ');
 						refl->m_desc.resize(14U, ' ');
 						m_newReflectors.push_back(refl);
@@ -120,34 +120,34 @@ bool CReflectors::load()
 				char* p1 = ::strtok(buffer, ";\r\n");
 				char* p2 = ::strtok(NULL, ";\r\n");
 				char* p3 = ::strtok(NULL, ";\r\n");
-				
+
 				if (p1 != NULL && p2 != NULL && p3 != NULL) {
 					CReflector* refl = new CReflector;
 					char tmp1[20];
-					unsigned int tmp;	
-						
+					unsigned int tmp;
+
 					strcpy(tmp1,p1+3);
 					tmp=atoi(tmp1);
 					refl->m_id = std::to_string(tmp);
-					// LogMessage("ID: %s",refl->m_id.c_str());
-					// LogMessage("Name: %s",p2);
-					
+				//	LogMessage("ID: %s",refl->m_id.c_str());
+				//	LogMessage("Name: %s",p2);
+
 					refl->m_name    = std::string(p2);
 					refl->m_desc    = std::string(p3);
 					refl->m_count   = "000";
 					refl->m_type    = m_type;
-					refl->m_opt 	= 0;					
+					refl->m_opt 	= 0;
 					refl->m_name.resize(16U, ' ');
 					refl->m_desc.resize(14U, ' ');
 					m_newReflectors.push_back(refl);
-					}			
-			
-			} else if ((m_type==NXDN) || (m_type==P25)) {	
+					}
+
+			} else if ((m_type==NXDN) || (m_type==P25)) {
 				char* p1 = ::strtok(buffer, ";\r\n");
 				char* p2 = ::strtok(NULL, ";\r\n");
 				char* p3 = ::strtok(NULL, ";\r\n");
 				//LogMessage("Ref: -%s-%s-%s",p1,p2,p3);
-				
+
 				if (p1 != NULL && p2 != NULL && p3 != NULL) {
 					CReflector* refl = new CReflector;
 					refl->m_id = std::string(p1);
@@ -159,18 +159,18 @@ bool CReflectors::load()
 					refl->m_name.resize(16U, ' ');
 					refl->m_desc.resize(14U, ' ');
 					m_newReflectors.push_back(refl);
-					}						
+					}
 			} else if (m_type==DMR) {
 				char* p1 = ::strtok(buffer, ";\r\n");
 				char* p2 = ::strtok(NULL, ";\r\n");
 				char* p3 = ::strtok(NULL, ";\r\n");
 				char* p4 = ::strtok(NULL, ";\r\n");
 				char* p5 = ::strtok(NULL, ";\r\n");
-				
+
 				if (p1 != NULL && p2 != NULL && p3 != NULL && p4 != NULL && p5 != NULL) {
 					char tmp[6];
 					CReflector* refl = new CReflector;
-					
+
 					sprintf(tmp,"%03d", atoi(p3));
 					refl->m_count   = std::string(tmp);
 					refl->m_id      = std::string(p1);
@@ -178,7 +178,7 @@ bool CReflectors::load()
 					refl->m_desc    = std::string(p5);
 
 					refl->m_type    = DMR;
-					refl->m_opt 	= atoi(p2);					
+					refl->m_opt 	= atoi(p2);
 					refl->m_name.resize(16U, ' ');
 					refl->m_desc.resize(14U, ' ');
 					m_newReflectors.push_back(refl);
@@ -186,11 +186,11 @@ bool CReflectors::load()
 			}	else if (m_type==DMRP) {
 				char* p1 = ::strtok(buffer, ";\r\n");
 				char* p2 = ::strtok(NULL, ";\r\n");
-				
+
 				if (p1 != NULL && p2 != NULL) {
 					char tmp[6];
 					CReflector* refl = new CReflector;
-					
+
 					sprintf(tmp,"%03d", 0);
 					refl->m_count   = std::string(tmp);
 					refl->m_id      = std::string(p1);
@@ -198,12 +198,12 @@ bool CReflectors::load()
 					refl->m_desc    = std::string(p2);
 
 					refl->m_type    = DMR;
-					refl->m_opt 	= 1;					
+					refl->m_opt 	= 1;
 					refl->m_name.resize(16U, ' ');
 					refl->m_desc.resize(14U, ' ');
 					m_newReflectors.push_back(refl);
 					}
-			}	
+			}
 		}
 
 		::fclose(fp);

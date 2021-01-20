@@ -713,12 +713,12 @@ void CYSFGateway::startupReLinking()
 
 bool CYSFGateway::startupLinking()
 {
-	int tmp_id = m_conf.getNetworkTypeStartup();	
+	int tmp_id = m_conf.getNetworkTypeStartup();
 	CReflector* reflector;
 	unsigned int dstId;
 
 	LogMessage("Entrado en startup: %d",tmp_id);
-	
+
 	switch(tmp_id) {
 		case NONE:
 			LogMessage("Error startup Type not defined.");
@@ -733,7 +733,7 @@ bool CYSFGateway::startupLinking()
 			if (!m_fcsNetworkEnabled) return false;
 			m_actual_ref=m_fcsReflectors;
 		}
-		break;		
+		break;
 		case DMR: {
 			if (!m_dmrNetworkEnabled) return false;
 			m_actual_ref=m_dmrReflectors;
@@ -763,38 +763,44 @@ bool CYSFGateway::startupLinking()
 	} else {
 		if ((m_tg_type == DMR)) { // && m_ysf_callsign.empty()) {
 			m_wiresX->setReflectors(m_dmrReflectors);
-			dstId = m_Streamer->get_dstid();				
+			dstId = m_Streamer->get_dstid();
 			reflector = m_dmrReflectors->findById(std::to_string(dstId));
 			if (reflector != NULL) {
 				m_current = reflector->m_name;
-				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
+				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');
 				LogMessage("DMR TG: %s",m_current.c_str());
-				m_wiresX->setReflector(reflector->m_name, dstId);				
+				m_wiresX->setReflector(reflector->m_name, dstId);
 			} else {
 				m_current = std::string("TG") + std::to_string(dstId);
 				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');
-				LogMessage("DMR TG: %s",m_current.c_str());				
-				m_wiresX->setReflector("", dstId);	
+				LogMessage("DMR TG: %s",m_current.c_str());
+				m_wiresX->setReflector("", dstId);
 			}
 			m_last_DMR_TG = dstId; 
 			m_dmrNetwork->enable(true);
 		} else {
-				LogMessage("listo para buscar reflector en startup");
-			if (is_number(m_startup)) reflector = m_actual_ref->findById(m_startup);
-			else reflector = m_actual_ref->findByName(m_startup);	
-				LogMessage("Encontrado reflector en startup");	
-			if (reflector != NULL) dstId = atoi(reflector->m_id.c_str());
+
+			LogMessage("listo para buscar reflector %s en startup",m_startup.c_str());
+			if (is_number(m_startup)) {
+				m_startup.erase(0, m_startup.find_first_not_of('0'));
+				reflector = m_actual_ref->findById(m_startup);
+			}
+			else reflector = m_actual_ref->findByName(m_startup);
+			if (reflector != NULL) {
+				LogMessage("Encontrado reflector %s en startup",m_startup.c_str());
+				dstId = atoi(reflector->m_id.c_str());
+			}
 			else {
-				LogMessage("Unknown reflector - %s", m_startup.c_str());	
+				LogMessage("Unknown reflector - %s", m_startup.c_str());
 				return false;
 			}
 		}
-			LogMessage("Antes de llamar a TGCOnnect en startup");	
+			LogMessage("Antes de llamar a TGCOnnect en startup");
 		if (TG_Connect(dstId)) {
 			LogMessage("Automatic (re-)connection to %5.5s - \"%s\"", reflector->m_id.c_str(), reflector->m_name.c_str());
 			m_original = dstId;
 			return true;
-		} else LogMessage("Not Possible connection - %d", atoi(reflector->m_id.c_str()));	
+		} else LogMessage("Not Possible connection - %d", atoi(reflector->m_id.c_str()));
 	}
 	return false;
 }
