@@ -259,7 +259,7 @@ void CYSFNetwork::clock(unsigned int ms)
 		m_room_id = atoi((const char*)(buffer+4));
 
 
-		if (length>7U) {
+		if (length>7) {
 			int len = 5 + strlen((const char*)(buffer+4));
 			m_room_connections = atoi((const char*)(buffer+len));
 			len += strlen((const char*)(buffer+len));

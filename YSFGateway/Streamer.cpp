@@ -793,7 +793,7 @@ CYSFPayload ysfPayload;
 			if ((m_tg_type == YSF) && (fi==YSF_FI_HEADER) && (m_ysfNetwork->getRoomInfo(id,connections,tmp_str))) { 
 				//	LogMessage("Room Name: %s, connections: %d",m_netDst.c_str(),connections);
 					if (!tmp_str.empty()) {
-						m_wiresX->setTgCount((int) connections);
+						m_wiresX->setTgCount((int) connections,tmp_str);
 						m_netDst = tmp_str;
 					}
 				}
@@ -1890,6 +1890,10 @@ std::string CStreamer::getSrcYSF_fromFN1(const unsigned char* buffer) {
 
 void CStreamer::processWiresX(const unsigned char* buffer, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt)
 {
+	unsigned int connections=0;
+	unsigned int id;
+    std::string tmp_str;
+
 	assert(buffer != NULL);
     //LogMessage("Calling process with fi=%d,dt=%d,fn=%d,ft=%d,bn=%d,bt=%d",fi,dt,fn,ft,bn,bt);
 	WX_STATUS status = m_wiresX->process(buffer + 35U, buffer + 14U, fi, dt, fn, ft, bn, bt);
@@ -1909,6 +1913,17 @@ void CStreamer::processWiresX(const unsigned char* buffer, unsigned char fi, uns
 		break;
 		case WXS_DISCONNECT: {
 			m_wx_returned = WXS_DISCONNECT;
+		}
+		case WXS_DX: {
+			if (m_tg_type == YSF) {
+				if (m_ysfNetwork->getRoomInfo(id,connections,tmp_str)) {
+						if (!tmp_str.empty()) {
+							m_wiresX->setTgCount((int) connections,tmp_str);
+							m_netDst = tmp_str;
+							//LogMessage("Room ID: %d, connections: %d, name: %s",id,connections,m_netDst.c_str());			
+						}
+					}		
+			}	
 		}
 		break;
 		default:
@@ -2060,11 +2075,10 @@ void CStreamer::SendDummyYSF(CYSFNetwork *ysf_network, unsigned int dg_id)
 
 	if (ysf_network->getRoomInfo(id,connections,tmp_str)) {
 		if (!tmp_str.empty()) {
-			//m_wiresX->setTgCount((int) connections);
+			//m_wiresX->setTgCount((int) connections,tmp_str);
 			m_netDst = tmp_str;
 			LogMessage("Room ID: %d, connections: %d, name: %s",id,connections,m_netDst.c_str());			
-		} else LogMessage("Room ID: %d",id);
-		//m_wiresX->setTgCount((int) connections);		
+		} else LogMessage("Room ID: %d",id);	
 		if (id == dg_id) return;
 	}
 	LogMessage("Sending Dummy YSF, source: %s to DG-ID: %d",m_ysf_callsign.c_str(),dg_id);

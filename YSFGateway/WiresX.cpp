@@ -507,7 +507,9 @@ unsigned int CWiresX::getTgCount()
 	return m_count;
 }
 
-void CWiresX::setTgCount(int count) {
+void CWiresX::setTgCount(int count, std::string name) {
+	room_name = name;
+	room_name.resize(16U, ' ');
 	m_count = count;
 }
 
@@ -1155,13 +1157,20 @@ void CWiresX::sendDXReply()
 		for (unsigned int i = 0U; i < 5U; i++)
 			data[i + 36U] = buffAsStdStr.at(i);
 
-		for (unsigned int i = 0U; i < 16U; i++)
-			data[i + 41U] = reflector->m_name.at(i);
+
 
 		if (m_count!=-1) {
+
+			for (unsigned int i = 0U; i < 16U; i++)
+				data[i + 41U] = room_name.at(i);
+
 			for (unsigned int i = 0U; i < 3U; i++)
 				data[i + 57U] = str.at(i);
 		} else {
+
+			for (unsigned int i = 0U; i < 16U; i++)
+				data[i + 41U] = reflector->m_name.at(i);
+
 			for (unsigned int i = 0U; i < 3U; i++)
 				data[i + 57U] = reflector->m_count.at(i);
 		}

@@ -83,7 +83,7 @@ public:
 	WX_STATUS processVDMODE1(std::string& callsign, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);	
 	unsigned int getDstID();
 	unsigned int getTgCount();
-	void setTgCount(int count);	
+	void setTgCount(int count, std::string name);	
 	unsigned int getOpt(unsigned int id);
 
 	void setInfo(const std::string& name, unsigned int txFrequency, unsigned int rxFrequency);
@@ -119,6 +119,7 @@ private:
 	std::string     m_reflector;
 	std::string     m_id;
 	std::string     m_name;
+	std::string     room_name;
 	unsigned char*  m_command;
 	unsigned int    m_txFrequency;
 	unsigned int    m_rxFrequency;
