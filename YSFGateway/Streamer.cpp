@@ -780,11 +780,23 @@ CYSFPayload ysfPayload;
 		CYSFFICH fich;
 		bool valid = fich.decode(buffer + 35U);
 
+		unsigned int connections=0;
+		unsigned int id;	
+		
 		if (valid) {
 			unsigned char fi = fich.getFI();
 			unsigned char dt = fich.getDT();
 			unsigned char fn = fich.getFN();
 			unsigned char ft = fich.getFT();  // ft=6 no gps  ft=7 gps
+
+	
+			if ((m_tg_type == YSF) && (fi==YSF_FI_HEADER) && (m_ysfNetwork->getRoomInfo(id,connections,tmp_str))) { 
+				//	LogMessage("Room Name: %s, connections: %d",m_netDst.c_str(),connections);
+					if (!tmp_str.empty()) {
+						m_wiresX->setTgCount((int) connections);
+						m_netDst = tmp_str;
+					}
+				}
 
 			//  if (fi==YSF_FI_HEADER) {
 			//  	last_num=buffer[34U];
@@ -809,7 +821,7 @@ CYSFPayload ysfPayload;
 
 			//LogMessage("RX Packet gid=%d, fi=%d,dt=%d,fn=%d,ft=%d.",m_gid,fi,dt,fn,ft);										
 			if (dt==YSF_DT_VD_MODE1) {	
-				if (fi==YSF_FI_HEADER) {
+				if (fi==YSF_FI_HEADER) {					
 					m_rcv_callsign = getSrcYSF_fromHeader(buffer);
 					m_gid = fich.getDGId();					
 					LogMessage("Received Voice Data Mode 1 *%s* from *%s*, gid=%d.",m_rcv_callsign.c_str(),m_netDst.c_str(),m_gid);
@@ -984,6 +996,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 	static bool start_silence = false;
 	unsigned int fn;
 	unsigned int ysfFrameType;
+
 	std::string tmp_callsign = m_callsign;
 	tmp_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 
@@ -1013,7 +1026,8 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_HEADER) {			
-				::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
+				if (m_beacon_status != BE_OFF) ::memcpy(m_ysfFrame + 4U, tmp_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			} 
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
@@ -1060,7 +1074,11 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			silence_number = 0;
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_EOT) {
-				::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
+				if (m_beacon_status != BE_OFF) {
+					::memcpy(m_ysfFrame + 4U, tmp_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+					m_beacon_status = BE_OFF;
+				}
+				else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			}
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
@@ -1107,7 +1125,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_real_rcv_callsign = std::string("");
 			m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 			m_rcv_callsign = m_real_rcv_callsign;		
-			if (m_beacon_status != BE_OFF) m_beacon_status = BE_OFF;
+			//if (m_beacon_status != BE_OFF) m_beacon_status = BE_OFF;
 			m_inacBeaconTimer->start();
 			memcpy(ysf_radioid,std_ysf_radioid,5U);
 			m_conv.reset();	
@@ -1118,7 +1136,8 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			//LogMessage("call : *%s*",m_real_rcv_callsign.c_str());
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_DATA) {			
-				::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
+				if (m_beacon_status != BE_OFF) ::memcpy(m_ysfFrame + 4U, tmp_callsign.c_str(), YSF_CALLSIGN_LENGTH);
+				else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
 				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			}
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
@@ -1139,6 +1158,11 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 							//Callsign
 							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_real_rcv_callsign.c_str());
 							break;
+						case 2:
+							//Callsign
+							if (m_beacon_status != BE_OFF) payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)tmp_callsign.c_str());
+							else payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_netDst.c_str());
+							break;							
 						case 5:					
 							if (ysf_radioid[0] != '*') {
 								memset(dch, ' ', YSF_CALLSIGN_LENGTH/2);
@@ -1268,7 +1292,7 @@ void CStreamer::DMR_get_Network(CDMRData tx_dmrdata, unsigned int ms) {
 					m_rcv_callsign = m_lookup->findCS(SrcId);							
 					CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
 					if (tmp_ref) m_netDst = tmp_ref->m_name;
-					//else m_netDst = std::string("TG") + std::to_string(DstId);
+					else m_netDst = std::string("TG") + std::to_string(DstId);
 				}
 				m_conv.putDMRHeader();
 				m_open_channel=true;
@@ -1303,7 +1327,7 @@ void CStreamer::DMR_get_Network(CDMRData tx_dmrdata, unsigned int ms) {
 						m_rcv_callsign = m_lookup->findCS(SrcId);															
 						CReflector* tmp_ref = m_dmrReflectors->findById(std::to_string(DstId));
 						if (tmp_ref) m_netDst = tmp_ref->m_name;
-						//else m_netDst = "UNKNOW";
+						else m_netDst = std::string("TG") + std::to_string(DstId);
 					}
 					LogMessage("DMR audio late entry received from %s to %s", m_rcv_callsign.c_str(), m_netDst.c_str());
 					m_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
@@ -2023,6 +2047,9 @@ void CStreamer::SendDummyYSF(CYSFNetwork *ysf_network, unsigned int dg_id)
 	CYSFPayload payload;
 	CYSFFICH fich;	
 	unsigned int i;	
+	unsigned int connections=0;
+	unsigned int id;
+    std::string tmp_str;
 
 	if (dg_id == 0) return;	
 
@@ -2031,9 +2058,15 @@ void CStreamer::SendDummyYSF(CYSFNetwork *ysf_network, unsigned int dg_id)
 		m_ysf_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 	}
 
-	unsigned int id=ysf_network->getRoomID();
-	LogMessage("Room ID: %d",id);
-	if (id == dg_id) return;
+	if (ysf_network->getRoomInfo(id,connections,tmp_str)) {
+		if (!tmp_str.empty()) {
+			//m_wiresX->setTgCount((int) connections);
+			m_netDst = tmp_str;
+			LogMessage("Room ID: %d, connections: %d, name: %s",id,connections,m_netDst.c_str());			
+		} else LogMessage("Room ID: %d",id);
+		//m_wiresX->setTgCount((int) connections);		
+		if (id == dg_id) return;
+	}
 	LogMessage("Sending Dummy YSF, source: %s to DG-ID: %d",m_ysf_callsign.c_str(),dg_id);
 
 	::memset(ysfFrame,0,155U);

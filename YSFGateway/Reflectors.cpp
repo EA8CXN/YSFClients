@@ -245,6 +245,14 @@ bool CReflectors::load()
 
 	std::sort(m_newReflectors.begin(), m_newReflectors.end(), refComparison);
 
+	for (std::vector<CReflector*>::iterator it = m_currReflectors.begin(); it != m_currReflectors.end(); ++it)
+		delete *it;
+
+	m_currReflectors.clear();
+
+	m_currReflectors = m_newReflectors;
+
+	m_newReflectors.clear();
 	return true;
 }
 
@@ -323,6 +331,7 @@ bool CReflectors::reload()
 {
 	if (m_newReflectors.empty())
 		return false;
+	load();
 
 	for (std::vector<CReflector*>::iterator it = m_currReflectors.begin(); it != m_currReflectors.end(); ++it)
 		delete *it;
@@ -331,7 +340,9 @@ bool CReflectors::reload()
 
 	m_currReflectors = m_newReflectors;
 
-	m_newReflectors.clear();
+
+
+//	m_newReflectors.clear();
 
 	return true;
 }
@@ -348,7 +359,7 @@ void CReflectors::clock(unsigned int ms)
 
 	if (m_timer.isRunning() && m_timer.hasExpired()) {
 		load();
-		reload();
+//		reload();
 		m_timer.start();
 	}
 }

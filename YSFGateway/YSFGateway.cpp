@@ -427,11 +427,11 @@ int CYSFGateway::run()
 	m_nxdnReflectors->load();
 	m_p25Reflectors->load();
 
-	m_ysfReflectors->reload();
-	m_fcsReflectors->reload();
-	m_dmrReflectors->reload();
-	m_nxdnReflectors->reload();
-	m_p25Reflectors->reload();
+	// m_ysfReflectors->reload();
+	// m_fcsReflectors->reload();
+	// m_dmrReflectors->reload();
+	// m_nxdnReflectors->reload();
+	// m_p25Reflectors->reload();
 
 	if (m_conf.getRemoteCommandsEnabled()) {
 		m_remoteSocket = new CUDPSocket(m_conf.getRemoteCommandsPort());

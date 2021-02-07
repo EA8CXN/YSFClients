@@ -52,7 +52,6 @@ m_node()
 
 	m_node = callsign;
 	m_node.resize(YSF_CALLSIGN_LENGTH, ' ');
-
 	// m_options = new unsigned char[50U];
 	// ::memcpy(m_options + 0U, "YSFO", 4U);	
 
@@ -258,7 +257,23 @@ void CYSFNetwork::clock(unsigned int ms)
 	if ((::memcmp(buffer, "YSFQ", 4U) == 0) && m_linked) {
 		buffer[length]=0;
 		m_room_id = atoi((const char*)(buffer+4));
-		m_id_response = true;	
+
+
+		if (length>7U) {
+			int len = 5 + strlen((const char*)(buffer+4));
+			m_room_connections = atoi((const char*)(buffer+len));
+			len += strlen((const char*)(buffer+len));
+			std::string s((const char*)(buffer+len+1), 10);
+			m_room_name = s;
+		//	if (m_debug)							
+				LogMessage("DG-ID Packet: room: %d, connections: %d, name:%s",m_room_id, m_room_connections, m_room_name.c_str());
+		} else {
+			m_room_connections = 0;
+			m_room_name = std::string("");
+		//	if (m_debug)			
+				LogMessage("DG-ID Packet: room: %d",m_room_id);
+		}
+		m_id_response = true;
 	}
 
 	if (m_debug)
@@ -293,8 +308,13 @@ void CYSFNetwork::close()
 }
 
 
-unsigned int CYSFNetwork::getRoomID() {
-	return m_room_id;
+bool CYSFNetwork::getRoomInfo(unsigned int& room_id, unsigned int& room_connections, std::string& room_name) {
+	if (m_id_response) {
+		room_id = m_room_id;
+		room_connections = m_room_connections;
+		room_name = m_room_name;
+	}
+	return m_id_response;
 }
 
 bool CYSFNetwork::connected() {

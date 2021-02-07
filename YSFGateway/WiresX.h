@@ -83,6 +83,7 @@ public:
 	WX_STATUS processVDMODE1(std::string& callsign, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned char bn, unsigned char bt);	
 	unsigned int getDstID();
 	unsigned int getTgCount();
+	void setTgCount(int count);	
 	unsigned int getOpt(unsigned int id);
 
 	void setInfo(const std::string& name, unsigned int txFrequency, unsigned int rxFrequency);
@@ -123,7 +124,7 @@ private:
 	unsigned int    m_rxFrequency;
 	unsigned int    m_dstID;
 	//unsigned int    m_fulldstID;	
-	unsigned int    m_count;	
+	int    			m_count;	
 	CTimer          m_timer;
 	CTimer          m_ptimer;
 	CTimer		    m_timeout;

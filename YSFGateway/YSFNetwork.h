@@ -48,7 +48,7 @@ public:
 
 	void clock(unsigned int ms);
 
-	unsigned int getRoomID();
+	bool getRoomInfo(unsigned int& room_id, unsigned int& room_connections, std::string& room_name);
 	bool connected();
 	bool id_getresponse();
 	void id_query_response();
@@ -68,8 +68,10 @@ private:
 	std::string                m_name;
 	bool                       m_linked;
 	bool                       m_id_response;
-	unsigned int			   m_room_id;	
-	std::string				   m_node;				
+	unsigned int			   m_room_id;
+	unsigned int			   m_room_connections;
+	std::string				   m_room_name;	
+	std::string				   m_node;
 };
 
 #endif

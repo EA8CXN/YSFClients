@@ -108,7 +108,7 @@ m_command(NULL),
 m_txFrequency(0U),
 m_rxFrequency(0U),
 m_dstID(0),
-m_count(0),
+m_count(-1),
 m_timer(500U, 1U),
 m_ptimer(1000U, 1U),
 m_timeout(1000U, 10U),
@@ -505,6 +505,10 @@ unsigned int CWiresX::getDstID()
 unsigned int CWiresX::getTgCount()
 {
 	return m_count;
+}
+
+void CWiresX::setTgCount(int count) {
+	m_count = count;
 }
 
 std::string CWiresX::getReflector() const
@@ -1084,6 +1088,11 @@ unsigned char CWiresX::calculateFT(unsigned int length, unsigned int offset, uns
 void CWiresX::sendDXReply()
 {
 	unsigned char data[150U];
+	char tmp[5];
+
+	sprintf(tmp,"%03d",m_count);
+	std::string str(tmp,3);
+
 	//::memset(data, 0x00U, 150U);
 	::memset(data, ' ', 128U);
 
@@ -1140,6 +1149,7 @@ void CWiresX::sendDXReply()
 		
 		char tmp[10];
 
+
 		snprintf(tmp, sizeof(tmp), "%05d",atoi(reflector->m_id.c_str()));
 		std::string buffAsStdStr = tmp;
 		for (unsigned int i = 0U; i < 5U; i++)
@@ -1148,8 +1158,13 @@ void CWiresX::sendDXReply()
 		for (unsigned int i = 0U; i < 16U; i++)
 			data[i + 41U] = reflector->m_name.at(i);
 
-		for (unsigned int i = 0U; i < 3U; i++)
-			data[i + 57U] = reflector->m_count.at(i);
+		if (m_count!=-1) {
+			for (unsigned int i = 0U; i < 3U; i++)
+				data[i + 57U] = str.at(i);
+		} else {
+			for (unsigned int i = 0U; i < 3U; i++)
+				data[i + 57U] = reflector->m_count.at(i);
+		}
 
 		for (unsigned int i = 0U; i < 14U; i++)
 			data[i + 70U] = reflector->m_desc.at(i);
