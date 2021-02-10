@@ -508,8 +508,14 @@ unsigned int CWiresX::getTgCount()
 }
 
 void CWiresX::setTgCount(int count, std::string name) {
-	room_name = name;
-	room_name.resize(16U, ' ');
+	char tmp[20];
+	unsigned int i;
+
+	for (i=0;i<strlen(name.c_str());i++) tmp[i]=name.at(i);
+	for (i=strlen(name.c_str());i<16U;i++) tmp[i]=' ';
+	tmp[16U]=0x00;
+
+	room_name.assign(tmp);
 	m_count = count;
 }
 
@@ -527,6 +533,7 @@ void CWiresX::setReflector(std::string reflector, int dstID)
 {
 	m_reflector = reflector;
 	m_dstID = dstID;
+	m_count = -1;
 }
 
 void CWiresX::processDX(const unsigned char* source)
@@ -1090,10 +1097,8 @@ unsigned char CWiresX::calculateFT(unsigned int length, unsigned int offset, uns
 void CWiresX::sendDXReply()
 {
 	unsigned char data[150U];
-	char tmp[5];
-
-	sprintf(tmp,"%03d",m_count);
-	std::string str(tmp,3);
+	char tmp[10];
+	std::string str;
 
 	//::memset(data, 0x00U, 150U);
 	::memset(data, ' ', 128U);
@@ -1124,8 +1129,7 @@ void CWiresX::sendDXReply()
 		// data[59U] = '0';
 		data[34U] = '1';
 		data[35U] = '5';
-				
-		char tmp[10];
+	
 		char tmp1[16];
 		snprintf(tmp, sizeof(tmp), "%05d",m_dstID);
 		std::string buffAsStdStr = tmp;
@@ -1148,8 +1152,6 @@ void CWiresX::sendDXReply()
 	} else {
 		data[34U] = '1';
 		data[35U] = '5';
-		
-		char tmp[10];
 
 
 		snprintf(tmp, sizeof(tmp), "%05d",atoi(reflector->m_id.c_str()));
@@ -1157,15 +1159,19 @@ void CWiresX::sendDXReply()
 		for (unsigned int i = 0U; i < 5U; i++)
 			data[i + 36U] = buffAsStdStr.at(i);
 
-
-
 		if (m_count!=-1) {
-
+			// str = std::string(room_name);
+			// str.resize(16U, ' ');			
+			//LogMessage("Outputing name: *%s*",room_name.c_str());			
 			for (unsigned int i = 0U; i < 16U; i++)
 				data[i + 41U] = room_name.at(i);
 
+			sprintf(tmp,"%03d",m_count);
+			str = std::string(tmp);
+			//LogMessage("Outputing m_count: %s",str.c_str());				
 			for (unsigned int i = 0U; i < 3U; i++)
 				data[i + 57U] = str.at(i);
+
 		} else {
 
 			for (unsigned int i = 0U; i < 16U; i++)

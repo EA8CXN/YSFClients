@@ -522,9 +522,11 @@ int CYSFGateway::run()
 					m_lostTimer.start();
 				} 
 				if (m_TG_connect_state == TG_DISABLE) m_TG_connect_state = TG_NONE;
-				m_ysfNetwork->id_query_response();
-				first_time_ysf_dgid = true;
-				m_dgid_timer.start();
+				if (m_ysfNetwork!= NULL && (m_tg_type==YSF)) {
+					m_ysfNetwork->id_query_response();
+					first_time_ysf_dgid = true;
+					m_dgid_timer.start();
+				}
 				m_inactivityTimer->start();
 			} 
 		}
@@ -541,7 +543,7 @@ int CYSFGateway::run()
 			m_inactivityTimer->start();
 			m_lostTimer.start();			
 		} */
-		if (m_ysfNetwork != NULL && first_time_ysf_dgid) {
+		if ((m_ysfNetwork != NULL) && first_time_ysf_dgid && (m_tg_type == YSF)) {
 			if (m_ysfNetwork->id_getresponse() || (m_dgid_timer.elapsed() > 4000U)) {
 				m_Streamer->SendDummyYSF(m_ysfNetwork,m_DGID);
 				first_time_ysf_dgid = false;

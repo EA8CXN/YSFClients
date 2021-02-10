@@ -47,11 +47,11 @@ m_resetTimer(1000U, 1U),
 m_state(FCS_UNLINKED)
 {
 	m_info_long = new unsigned char[100U];
-	::sprintf((char*)m_info_long, "%9u%9u%-6.6s%-12.12s%7u", rxFrequency, txFrequency, locator.c_str(), FCS_VERSION, id);
+	::sprintf((char*)m_info_long, "%9u%9u%-6.6s%-12.12s%07u", rxFrequency, txFrequency, locator.c_str(), FCS_VERSION, id);
 	::memset(m_info_long + 43U, ' ', 57U);
 
 	m_info = new unsigned char[80U];
-	::sprintf((char*)m_info, "FCSIFCS99999%9u%9u%-6.6s%-20.20s%-12.12s%7u", rxFrequency, txFrequency, locator.c_str(), name.c_str(), FCS_VERSION, id);	// KBC 2020-09-07
+	::sprintf((char*)m_info, "FCSIFCS99999%9u%9u%-6.6s%-20.20s%-12.12s%07u", rxFrequency, txFrequency, locator.c_str(), name.c_str(), FCS_VERSION, id);	// KBC 2020-09-07
 	::memset(m_info + 75U, ' ', 5U);
 
 	m_ping = new unsigned char[25U];
@@ -197,13 +197,13 @@ void CFCSNetwork::clock(unsigned int ms)
 	if (m_debug)
 		CUtils::dump(1U, "FCS Network Data Received", buffer, length);
 
-	if (length == 7) {
-		if (m_state == FCS_LINKING)
-			LogMessage("Linked to %s", m_print.c_str());
-		m_state = FCS_LINKED;
-		writeInfo(m_print);
-		writeOptions(m_print);
-	}
+	// if (length == 7) {
+	// 	if (m_state == FCS_LINKING)
+	// 		LogMessage("Linked to %s", m_print.c_str());
+	// 	m_state = FCS_LINKED;
+	// 	writeInfo(m_print);
+	// 	writeOptions(m_print);
+	// }
 
 	if (length == 10 && m_state == FCS_LINKING) {
 		LogMessage("Linked to %s", m_print.c_str());
@@ -283,8 +283,6 @@ void CFCSNetwork::writeInfoLong(const std::string& reflector)
 {
 	if (m_state != FCS_LINKED)
 		return;
-
-//	::memcpy(m_info_long + 4U, (reflector.substr(0,6)+reflector.substr(7,2)).c_str(), 8U);
 
 	if (m_debug)
 		CUtils::dump(1U, "FCS Network Data Sent long", m_info_long, 100U);

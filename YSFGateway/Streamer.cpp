@@ -790,8 +790,8 @@ CYSFPayload ysfPayload;
 			unsigned char ft = fich.getFT();  // ft=6 no gps  ft=7 gps
 
 	
-			if ((m_tg_type == YSF) && (fi==YSF_FI_HEADER) && (m_ysfNetwork->getRoomInfo(id,connections,tmp_str))) { 
-				//	LogMessage("Room Name: %s, connections: %d",m_netDst.c_str(),connections);
+			if ((m_tg_type == YSF) && (ft==fn) && (m_ysfNetwork->getRoomInfo(id,connections,tmp_str))) { 
+					//LogMessage("Room Name: %s, connections: %d",m_netDst.c_str(),connections);
 					if (!tmp_str.empty()) {
 						m_wiresX->setTgCount((int) connections,tmp_str);
 						m_netDst = tmp_str;
@@ -1222,7 +1222,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_ysf_cnt++;
 			m_ysfWatch.start();
 		} else {
-			if ((m_ysfWatch.elapsed() > 180U) && start_silence) {  // 180U
+			if ((m_ysfWatch.elapsed() > 220U) && start_silence) {  // 180U
 					m_conv.putDMRSilence();
 					silence_number++;
 					LogMessage("Inserting Silence number: %d",silence_number);
