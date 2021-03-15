@@ -51,7 +51,7 @@ public:
 
 	void setMobileLocation(const std::string& address, unsigned int port);
 
-	void write(const unsigned char* source, const char* type, unsigned char radio, float latitude, float longitude, unsigned int tg_type, unsigned int tg_qrv);
+	void write(const unsigned char* source, const char* type, unsigned char radio, float latitude, float longitude, unsigned int tg_type, unsigned int tg_qrv, std::string m_netDst);
 
 	void clock(unsigned int ms);
 

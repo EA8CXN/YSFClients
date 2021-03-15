@@ -441,8 +441,9 @@ int CYSFGateway::run()
 			m_remoteSocket = NULL;
 		}
 	}
-
-	m_wiresX = m_Streamer->createWiresX(&rptNetwork, m_conf.getWiresXMakeUpper(), m_callsign, m_conf.getLocation());	
+//	LogMessage("Before create WiresX");
+	m_wiresX = m_Streamer->createWiresX(&rptNetwork, m_conf.getWiresXMakeUpper(), m_callsign, m_conf.getLocation());
+//	LogMessage("After create WiresX");	
 	m_Streamer->createGPS(m_callsign);	
 	m_Streamer->setBeacon(m_inactivityTimer,&m_lostTimer, m_NoChange, m_DGID);	
 	m_Streamer->Init(&rptNetwork, m_ysfNetwork, m_fcsNetwork, m_dmrNetwork, m_dmrReflectors);
@@ -771,12 +772,12 @@ bool CYSFGateway::startupLinking()
 				m_current = reflector->m_name;
 				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');
 				LogMessage("DMR TG: %s",m_current.c_str());
-				m_wiresX->setReflector(reflector->m_name, dstId);
+				m_wiresX->setReflector(reflector->m_name, dstId,NULL);
 			} else {
 				m_current = std::string("TG") + std::to_string(dstId);
 				m_current.resize(YSF_CALLSIGN_LENGTH, ' ');
 				LogMessage("DMR TG: %s",m_current.c_str());
-				m_wiresX->setReflector("", dstId);
+				m_wiresX->setReflector("", dstId,NULL);
 			}
 			m_last_DMR_TG = dstId; 
 			m_dmrNetwork->enable(true);
@@ -812,7 +813,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 	CReflector* reflector;
 	std::string dst_str_ID = std::to_string(dstID);
     TG_TYPE last_type=m_tg_type;
-	int tglistOpt;
+	int tglistOpt,i;
 
 	if (dstID < 6) {
 		dstID--;
@@ -900,7 +901,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_Streamer->put_tgType(m_tg_type);						
 				m_Streamer->put_dstid(dstID);
 				m_wiresX->setReflectors(m_ysfReflectors);					
-				m_wiresX->setReflector(reflector->m_name, m_Streamer->get_dstid());			
+				m_wiresX->setReflector(reflector->m_name, m_Streamer->get_dstid(),NULL);	
+
 			} else if (m_ysfNetwork != NULL) {
 				m_lostTimer.stop();
 
@@ -925,7 +927,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 					m_Streamer->put_tgType(m_tg_type);						
 					m_Streamer->put_dstid(dstID);
 					m_wiresX->setReflectors(m_ysfReflectors);					
-					m_wiresX->setReflector(reflector->m_name, dstID);
+					m_wiresX->setReflector(reflector->m_name, dstID, m_ysfNetwork);
 					m_last_YSF_TG = dstID;
 					first_time_ysf_dgid = true;
 					m_dgid_timer.start();
@@ -960,7 +962,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 						m_Streamer->put_dstid(dstID);
 						m_last_FCS_TG = dstID;						
 						m_wiresX->setReflectors(m_fcsReflectors);
-						m_wiresX->setReflector(reflector->m_name, dstID);
+						m_wiresX->setReflector(reflector->m_name, dstID,NULL);
 						m_current_num = atoi(reflector->m_id.c_str());
 						m_last_FCS_TG = dstID;
 					} else return false;							
@@ -971,6 +973,17 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 		case DMRP:
 			m_dmrNetwork->enable(true);
 			reflector = m_dmrReflectors->findById(dst_str_ID);
+			if (reflector == NULL) {
+				for (i=1;i<10;i++) {
+					dst_str_ID = std::to_string((i*100000U)+dstID);
+					LogMessage("Trying %s",dst_str_ID.c_str());
+					reflector = m_dmrReflectors->findById(dst_str_ID);
+					if (reflector != NULL) {
+						dstID = atoi(dst_str_ID.c_str());
+						break;
+					}
+				}
+			}
 			if (reflector == NULL) {
 				if (m_enableUnlink) tglistOpt = 0;
 				else tglistOpt = 1;
@@ -1040,8 +1053,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			m_current.resize(YSF_CALLSIGN_LENGTH, ' ');	
 			m_tg_type = DMR;
 			m_Streamer->put_tgType(m_tg_type);				
-			if (reflector == NULL) m_wiresX->setReflector("", dstID);
-			else m_wiresX->setReflector(reflector->m_name, dstID);
+			if (reflector == NULL) m_wiresX->setReflector("", dstID,NULL);
+			else m_wiresX->setReflector(reflector->m_name, dstID,NULL);
 			m_wiresX->setReflectors(m_dmrReflectors);
 			// if (dstID == m_last_DMR_TG && !first_time_DMR) {
 			// 	m_wiresX->SendCReply();
@@ -1061,7 +1074,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_Streamer->put_tgType(m_tg_type);				
 				m_Streamer->put_dstid(dstID);
 				m_last_NXDN_TG = dstID;
-				m_wiresX->setReflector(reflector->m_name, m_Streamer->get_dstid());
+				m_wiresX->setReflector(reflector->m_name, m_Streamer->get_dstid(),NULL);
 				m_wiresX->setReflectors(m_nxdnReflectors);
 				m_wiresX->SendCReply();				
 				//m_wiresX->SendRConnect(m_ysfNetwork);
@@ -1081,7 +1094,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				m_Streamer->put_tgType(m_tg_type);				
 				m_Streamer->put_dstid(dstID);
 				m_last_P25_TG = dstID;
-				m_wiresX->setReflector(reflector->m_name, m_Streamer->get_dstid());
+				m_wiresX->setReflector(reflector->m_name, m_Streamer->get_dstid(),NULL);
 				m_wiresX->setReflectors(m_p25Reflectors);
 				m_wiresX->SendCReply();
 				//m_wiresX->SendRConnect(m_ysfNetwork);
@@ -1499,7 +1512,7 @@ void CYSFGateway::processRemoteCommands()
 			// }
 		} else if (::memcmp(buffer + 0U, "LinkFCS", 7U) == 0) {
 			std::string id = std::string((char*)(buffer + 7U));
-			if ((m_tg_type == DMR) || (m_tg_type == P25) || (m_tg_type == NXDN)) return;
+			//if ((m_tg_type == DMR) || (m_tg_type == P25) || (m_tg_type == NXDN)) return;
 			LogMessage("Triying to remote conect to FCS %s.",id.c_str());
 			// CReflector* reflector = m_fcsReflectors->findById(atoi(id.c_str()));
 			// if (reflector == NULL)
@@ -1521,6 +1534,33 @@ void CYSFGateway::processRemoteCommands()
 					m_wiresX->SendCReply();
 				} else {
 					LogMessage("Remote Error with FCS connect");
+					//m_wiresX->SendDReply();
+				}
+			// }		
+		} else if (::memcmp(buffer + 0U, "LinkDMR", 7U) == 0) {
+			std::string id = std::string((char*)(buffer + 7U));
+			if ((m_tg_type == DMR) || (m_tg_type == P25) || (m_tg_type == NXDN)) return;
+			LogMessage("Triying to remote conect to DMR %s.",id.c_str());
+			// CReflector* reflector = m_fcsReflectors->findById(atoi(id.c_str()));
+			// if (reflector == NULL)
+			// 	reflector = m_fcsReflectors->findByName(id);
+			// if (reflector != NULL) {				
+			// 	int tmp_dst_id = atoi(reflector->m_id.c_str());
+			// 	if (tmp_dst_id==0) {
+			// 		LogMessage("Reflector FCS non valid: %s",reflector->m_id.c_str());
+			// 		return;
+			// 	}
+				tmp_dst_id=atoi(id.c_str());
+				if ((m_tg_type != DMR)) {
+					m_last_DMR_TG=tmp_dst_id;					
+					ret=TG_Connect(4);
+				}
+				else ret = TG_Connect(tmp_dst_id);
+				if (ret) {
+					LogMessage("Remote Connected to DMR %05d - \"%s\" has been requested", tmp_dst_id, m_current.c_str());
+					m_wiresX->SendCReply();
+				} else {
+					LogMessage("Remote Error with DMR connect");
 					//m_wiresX->SendDReply();
 				}
 			// }		

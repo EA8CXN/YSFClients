@@ -120,6 +120,7 @@ m_csd3(NULL),
 m_status(WXSI_NONE),
 m_start(0U),
 m_category(),
+m_all(),
 m_makeUpper(makeUpper),
 m_busy(false),
 m_busyTimer(1000U, 1U),
@@ -135,13 +136,13 @@ m_picture_state(WXPIC_NONE),
 m_offset(0),
 m_pcount(0),
 m_end_picture(true),
-error_upload(false)
+error_upload(false),
+m_ysfNetwork(NULL)
 {
 	char tmp[20U];
 
 	assert(network != NULL);
 	m_enable = false;
-
 	m_node = callsign;
 	m_node.resize(YSF_CALLSIGN_LENGTH, ' ');
 	// LogMessage("m_node = %s",m_node.c_str());	
@@ -527,11 +528,22 @@ std::string CWiresX::getReflector() const
 void CWiresX::setReflectors(CReflectors* reflectors)
 {
 	m_reflectors = reflectors;
+	if (reflectors==NULL) return;
+
+	std::vector<CReflector*>& curr = m_reflectors->current();
+
+	m_all.clear();
+	for (std::vector<CReflector*>::const_iterator it = curr.cbegin(); it != curr.cend(); ++it) {
+			int count = atoi((*it)->m_count.c_str());
+			//LogMessage("Name %s, Count: %d",(*it)->m_name.c_str(),count);
+			if (count > 10) m_all.push_back(*it);
+	}
 }
 
-void CWiresX::setReflector(std::string reflector, int dstID)
+void CWiresX::setReflector(std::string reflector, int dstID, CYSFNetwork* ysfref)
 {
 	m_reflector = reflector;
+	m_ysfNetwork = ysfref;
 	m_dstID = dstID;
 	m_count = -1;
 }
@@ -551,7 +563,7 @@ void CWiresX::processCategory(const unsigned char* source, const unsigned char* 
 	::LogDebug("Received CATEGORY request from %10.10s", source);
 	m_busy = true;
 	m_busyTimer.start();
-	
+
 	char buffer[6U];
 	::memcpy(buffer, data + 5U, 2U);
 	buffer[3U] = 0x00U;
@@ -575,8 +587,7 @@ void CWiresX::processCategory(const unsigned char* source, const unsigned char* 
 		sprintf(tmp_id,"%d",atoi(id.c_str()));
 
 		CReflector* refl = m_reflectors->findById(std::string(tmp_id));
-		if (refl)
-			m_category.push_back(refl);
+		if (refl) m_category.push_back(refl);
 	}
 
 	m_status = WXSI_CATEGORY;
@@ -590,7 +601,7 @@ void CWiresX::processAll(const unsigned char* source, const unsigned char* data)
 	buffer[3U] = 0x00U;
 	m_busy = true;
 	m_busyTimer.start();
-	
+
 	if (data[0U] == '0' && data[1] == '1') {
 		::LogDebug("Received ALL for \"%3.3s\" from %10.10s", data + 2U, source);
 
@@ -1218,9 +1229,19 @@ void CWiresX::sendDXReply()
 void CWiresX::sendConnectReply()
 {
 	char tmp[10];
+	std::string str,tmp_str;
 //	assert(m_reflector != NULL);
-
 	unsigned char data[110U];
+
+
+	unsigned int connections=0;
+	unsigned int id;
+	
+	if ((m_ysfNetwork!=NULL) && (m_ysfNetwork->getRoomInfo(id,connections,tmp_str))) { 
+		//LogMessage("Room Name: %s, connections: %d",m_netDst.c_str(),connections);
+		if (!tmp_str.empty()) setTgCount((int) connections,tmp_str);
+	}
+
 	::memset(data, 0x00U, 110U);
 	::memset(data, ' ', 90U);
 
@@ -1271,11 +1292,27 @@ void CWiresX::sendConnectReply()
 		for (unsigned int i = 0U; i < 5U; i++)
 			data[i + 36U] = buffAsStdStr.at(i);
 
-		for (unsigned int i = 0U; i < 16U; i++)
-			data[i + 41U] = reflector->m_name.at(i);
+	if (m_count!=-1) {
+			// str = std::string(room_name);
+			// str.resize(16U, ' ');			
+			//LogMessage("Outputing name: *%s*",room_name.c_str());			
+			for (unsigned int i = 0U; i < 16U; i++)
+				data[i + 41U] = room_name.at(i);
 
-		for (unsigned int i = 0U; i < 3U; i++)
-			data[i + 57U] = reflector->m_count.at(i);
+			sprintf(tmp,"%03d",m_count);
+			str = std::string(tmp);
+			//LogMessage("Outputing m_count: %s",str.c_str());				
+			for (unsigned int i = 0U; i < 3U; i++)
+				data[i + 57U] = str.at(i);
+
+		} else {
+
+			for (unsigned int i = 0U; i < 16U; i++)
+				data[i + 41U] = reflector->m_name.at(i);
+
+			for (unsigned int i = 0U; i < 3U; i++)
+				data[i + 57U] = reflector->m_count.at(i);
+		}
 
 		for (unsigned int i = 0U; i < 14U; i++)
 			data[i + 70U] = reflector->m_desc.at(i);
@@ -1340,11 +1377,10 @@ void CWiresX::sendAllReply()
 {
 	unsigned char data[1100U];
 
-	if (m_start == 0U)
-		m_reflectors->reload();
+	// if (m_start == 0U)
+	// 	m_reflectors->reload();
 
-	std::vector<CReflector*>& curr = m_reflectors->current();
-
+	//std::vector<CReflector*>& curr = m_reflectors->current();
 
 	::memset(data, 0x00U, 1100U);
 
@@ -1362,11 +1398,11 @@ void CWiresX::sendAllReply()
 	for (unsigned int i = 0U; i < 10U; i++)
 		data[i + 12U] = m_node.at(i);
 
-	unsigned int total = curr.size();
+	unsigned int total = m_all.size();
 	if (total > 999U) total = 999U;
 	LogMessage("Tamano: %d",total);
 
-	unsigned int n = curr.size() - m_start;
+	unsigned int n = m_all.size() - m_start;
 	if (n > 20U) n = 20U;
 
 	::sprintf((char*)(data + 22U), "%03u%03u", n, total);
@@ -1375,7 +1411,7 @@ void CWiresX::sendAllReply()
 
 	unsigned int offset = 29U;
 	for (unsigned int j = 0U; j < n; j++, offset += 50U) {
-		CReflector* refl = curr.at(j + m_start);
+		CReflector* refl = m_all.at(j + m_start);
 		
 		char tmp_id[6];
 		sprintf(tmp_id,"%05d",atoi(refl->m_id.c_str()));		

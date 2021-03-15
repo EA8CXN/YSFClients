@@ -41,6 +41,7 @@ m_sent(false)
 	assert(writer);
 
 	m_buffer = new unsigned char[300U];
+	m_netDst = "";
 }
 
 CGPS::~CGPS()
@@ -53,7 +54,7 @@ bool CGPS::open()
 	return m_writer->open();
 }
 
-void CGPS::data(const unsigned char* source, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned int type, unsigned int tg_qrv)
+void CGPS::data(const unsigned char* source, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned int type, unsigned int tg_qrv, std::string netDst)
 {
 	if (m_sent)
 		return;
@@ -64,6 +65,7 @@ void CGPS::data(const unsigned char* source, const unsigned char* data, unsigned
 	CYSFPayload payload;
 	m_type = type;
 	m_tg_qrv = tg_qrv;
+	m_netDst = netDst;
 
 	if (dt == YSF_DT_VD_MODE1) {
 		if (fn == 0U || fn == 1U || fn == 2U)
@@ -331,7 +333,7 @@ void CGPS::transmitGPS(const unsigned char* source)
 
 	LogMessage("GPS Position from %10.10s of radio=%s lat=%f long=%f", source, radio, latitude, longitude);
 
-	m_writer->write(source, radio, m_buffer[4U], latitude, longitude, m_type, m_tg_qrv);
+	m_writer->write(source, radio, m_buffer[4U], latitude, longitude, m_type, m_tg_qrv, m_netDst);
 
 	m_sent = true;
 }

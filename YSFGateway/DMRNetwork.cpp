@@ -363,8 +363,8 @@ void CDMRNetwork::clock(unsigned int ms)
 		return;
 	}
 
-	// if (m_debug && length > 0)
-	//	CUtils::dump(1U, "Network Received", m_buffer, length);
+	 if (m_debug && length > 0)
+		CUtils::dump(1U, "Network Received", m_buffer, length);
 
 	if (length > 0 && m_address.s_addr == address.s_addr && m_port == port) {
 		if (::memcmp(m_buffer, "DMRD", 4U) == 0) {
@@ -651,8 +651,8 @@ bool CDMRNetwork::write(const unsigned char* data, unsigned int length)
 	assert(data != NULL);
 	assert(length > 0U);
 
-	// if (m_debug)
-	//	CUtils::dump(1U, "Network Transmitted", data, length);
+	 if (m_debug)
+		CUtils::dump(1U, "Network Transmitted", data, length);
 
 	bool ret = m_socket.write(data, length, m_address, m_port);
 	if (!ret) {

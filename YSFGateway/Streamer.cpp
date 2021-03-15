@@ -163,7 +163,9 @@ std::string CStreamer::get_ysfcallsign(void) {
 }		
 
 void CStreamer::putNetDst(std::string newDst) {
+	LogMessage("********putNetDst: %s", newDst.c_str());
     m_netDst = newDst;
+	m_orig_Dst = newDst;
 }
 
 unsigned int CStreamer::get_srcid(void) {
@@ -394,8 +396,11 @@ CWiresX* CStreamer::createWiresX(CYSFNetwork* rptNetwork, bool makeUpper, std::s
 {
 
 	assert(rptNetwork != NULL);
+	//LogMessage("Before storage");	
 	m_storage = new CWiresXStorage(m_conf->getNewsPath());
+	//LogMessage("Before Constructor");	
 	m_wiresX = new CWiresX(m_storage, callsign, location, rptNetwork, makeUpper, &m_conv);
+	//LogMessage("After Constructor");	
 //	m_dtmf = new CDTMF();
 	
 	std::string name = m_conf->getCallsign();
@@ -666,7 +671,8 @@ WX_STATUS ret;
 			}
 
 			if (m_gps != NULL) {
-				m_gps->data(recv_buffer + 14U, recv_buffer + 35U, fi, dt, fn, ft, m_tg_type, m_dstid);
+				if (m_tg_type == DMR) m_gps->data(recv_buffer + 14U, recv_buffer + 35U, fi, dt, fn, ft, m_tg_type, m_dstid, m_orig_Dst);						 
+					else m_gps->data(recv_buffer + 14U, recv_buffer + 35U, fi, dt, fn, ft, m_tg_type, m_dstid, m_netDst);
 				if (fi == YSF_FI_TERMINATOR) m_gps->reset();
 			}
 
@@ -1222,7 +1228,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			m_ysf_cnt++;
 			m_ysfWatch.start();
 		} else {
-			if ((m_ysfWatch.elapsed() > 220U) && start_silence) {  // 180U
+			if ((m_ysfWatch.elapsed() > 150U) && start_silence) {  // 180U
 					m_conv.putDMRSilence();
 					silence_number++;
 					LogMessage("Inserting Silence number: %d",silence_number);

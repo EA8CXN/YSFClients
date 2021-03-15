@@ -93,7 +93,7 @@ public:
 
 	std::string getReflector() const;
 	void setReflectors(CReflectors* reflectors);
-	void setReflector(std::string reflector, int dstID);
+	void setReflector(std::string reflector, int dstID, CYSFNetwork* ysfref);
 	void SendCReply(void);
 	void SendDReply(void);
 	void SendPReply(CYSFNetwork* ysfNetwork);
@@ -137,6 +137,7 @@ private:
 	WXSI_STATUS     m_status;
 	unsigned int    m_start;
 	std::vector<CReflector*> m_category;
+	std::vector<CReflector*> m_all;	
 	bool                 m_makeUpper;	
 	std::string     m_search;
 	bool            m_busy;

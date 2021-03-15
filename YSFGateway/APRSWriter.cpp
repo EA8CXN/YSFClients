@@ -26,6 +26,9 @@
 #include <cassert>
 #include <cstring>
 #include <cmath>
+#include <algorithm>
+#include <string>
+using namespace std;
 
 CAPRSWriter::CAPRSWriter(const std::string& callsign, const std::string& password, const std::string& address, unsigned int port, bool follow) :
 m_thread(NULL),
@@ -36,6 +39,8 @@ m_txFrequency(0U),
 m_rxFrequency(0U),
 m_latitude(0.0F),
 m_longitude(0.0F),
+fm_latitude(0.0F),
+fm_longitude(0.0F),
 m_follow(follow),
 m_height(0),
 m_desc(),
@@ -103,11 +108,13 @@ bool CAPRSWriter::open()
 	return m_thread->start();
 }
 
-void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned char radio, float fLatitude, float fLongitude, unsigned int tg_type, unsigned int tg_qrv)
+void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned char radio, float fLatitude, float fLongitude, unsigned int tg_type, unsigned int tg_qrv, std::string m_netDst)
 {
 	char callsign[15U];
+	char cad_tmp[20];
 	char suffix[3];
-	char s_type[10];
+	char s_type[20];
+	char *ptr;
 	
 	assert(source != NULL);
 	assert(type != NULL);
@@ -122,10 +129,7 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 		LogMessage("Catching %s position.",m_node_callsign.c_str());
 		fm_latitude = fLatitude;
 		fm_longitude = fLongitude;
-	} else {
-		fm_latitude = 0;
-		fm_longitude = 0;	
-	}
+	} 
 
 	::memcpy(callsign, source, YSF_CALLSIGN_LENGTH);
 	callsign[YSF_CALLSIGN_LENGTH] = 0x00U;
@@ -175,32 +179,38 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 	}
 
 	switch (tg_type) {
-		case 1U:
-		strcpy(s_type, "YSF ");		
-		break;		
+		case 1U: 
+		if (tg_qrv == 7U) strcpy(s_type, "@EuropeLink");	
+		else strcpy(s_type, "@YSF");		
+		break;	
 		case 2U:
-		strcpy(s_type, "FCS ");		
+		strcpy(s_type, "@FCS");		
 		break;
 		case 3U:
-		strcpy(s_type, "DMR TG-");		
+		strcpy(s_type, "@DMR");		
 		break;
 		case 4U:
-		strcpy(s_type, "P25 ");		
+		strcpy(s_type, "@P25");		
 		break;
 		case 5U:
-		strcpy(s_type, "NXDN ");		
+		strcpy(s_type, "@NXDN");		
 		break;
 		default:
 		strcpy(s_type, " ");		
 		break;
 	}
 
+	strcpy(cad_tmp,m_netDst.c_str());
+	ptr=((char *) cad_tmp)+strlen(cad_tmp)-1;
+	while (*ptr==' ') ptr--;
+	*(ptr+1)=0;
+
 	char output[300U];
-	::sprintf(output, "%s%s>APDPRS,C4FM*,qAR,%s:!%s%c/%s%c%c %s QRV %s%d via MMDVM",
+	::sprintf(output, "%s%s>APDPRS,C4FM*,qAR,%s:!%s%c/%s%c%c %s QRV %s%s via MMDVM",
 		callsign, suffix, m_callsign.c_str(),
 		lat, (fLatitude < 0.0F) ? 'S' : 'N',
 		lon, (fLongitude < 0.0F) ? 'W' : 'E',
-		symbol, type, s_type, tg_qrv);
+		symbol, type, cad_tmp, s_type);
 
 	m_thread->write(output);
 }
@@ -268,7 +278,7 @@ void CAPRSWriter::sendIdFrameFixed()
 
 	if (fm_longitude == 0.0F) tempLong = ::fabs(m_longitude);
 	else {
-		//LogMessage("lon: %f",fm_longitude);
+	//	LogMessage("lon: %f",fm_longitude);
 		tempLong = ::fabs(fm_longitude);
 	}
 
@@ -279,10 +289,10 @@ void CAPRSWriter::sendIdFrameFixed()
 	longitude = (tempLong - longitude) * 60.0 + longitude * 100.0;
 
 	char lat[20U];
-	::sprintf(lat, "%07.2lf", latitude);
+	::sprintf(lat, "%07.2f", latitude);
 
 	char lon[20U];
-	::sprintf(lon, "%08.2lf", longitude);
+	::sprintf(lon, "%08.2f", longitude);
 
 	char output[500U];
 	char mobile[10];

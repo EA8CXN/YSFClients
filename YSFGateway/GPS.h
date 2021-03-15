@@ -32,7 +32,7 @@ public:
 
 	bool open();
 
-	void data(const unsigned char* source, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned int type, unsigned int tg_qrv);
+	void data(const unsigned char* source, const unsigned char* data, unsigned char fi, unsigned char dt, unsigned char fn, unsigned char ft, unsigned int type, unsigned int tg_qrv, std::string m_netDst);
 
 	void clock(unsigned int ms);
 
@@ -46,6 +46,7 @@ private:
 	bool           m_sent;
 	unsigned int   m_tg_qrv;
 	unsigned int   m_type;
+	std::string    m_netDst;
 
 	void transmitGPS(const unsigned char* source);
 };

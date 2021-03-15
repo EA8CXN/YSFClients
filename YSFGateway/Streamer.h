@@ -132,6 +132,7 @@ private:
     bool             m_saveAMBE;
 	std::string		 m_ysf_callsign;
 	std::string      m_netDst;
+	std::string      m_orig_Dst;    
 	CDMRLookup*      m_lookup;	
     CWiresXStorage*  m_storage;
 	CWiresX*         m_wiresX;    
