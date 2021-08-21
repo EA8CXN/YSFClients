@@ -258,9 +258,14 @@ bool CReflectors::load()
 
 CReflector* CReflectors::findById(const std::string& id)
 {
+
+//	LogMessage("Looking for reflector %s",id.c_str());
+
 	for (std::vector<CReflector*>::const_iterator it = m_currReflectors.cbegin(); it != m_currReflectors.cend(); ++it) {
-		if (id == (*it)->m_id)
+		if (id == (*it)->m_id) {
+		//	LogMessage("Found reflector %s : %s",id.c_str(),(*it)->m_name.c_str());
 			return *it;
+		}			
 	}
 
 	LogMessage("Trying to find non existent %s reflector with an id of %s", m_type_str.c_str(), id.c_str());

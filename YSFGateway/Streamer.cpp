@@ -1513,7 +1513,7 @@ static bool sending_silence=false;
 				rx_dmrdata.setRSSI(0U);
 				rx_dmrdata.setDataType(DT_VOICE_LC_HEADER);
 //				memcpy(ysf_radioid,std_ysf_radioid,5U);
-
+				LogMessage("Start of DMR, %d->%d", m_srcid, m_dstid);
 				// Add sync
 				CSync::addDMRDataSync(m_dmrFrame, 0);
 
@@ -1657,18 +1657,20 @@ static bool sending_silence=false;
 unsigned int CStreamer::findYSFID(std::string cs, bool showdst)
 {
 	std::string cstrim;
+	std::string callsingtrim;
+	unsigned int m_defsrcid;
 	//bool dmrpc = false;
-	unsigned int id;
+	unsigned int id;	
+	unsigned int m_srcHS = m_conf->getId();		
 	
-	//LogMessage("cs=%s",cs.c_str());
-	
+	// LogMessage("cs=%s",cs.c_str());
+	// LogMessage("callsign=%s",m_callsign.c_str());
+
 	int first = cs.find_first_not_of(' ');
 	int mid1 = cs.find_last_of('-');
 	int mid2 = cs.find_last_of('/');
 	int last = cs.find_last_not_of(' ');
-	
-	//LogMessage("trim=%s",cs.c_str());
-	
+
 	if (mid1 == -1 && mid2 == -1 && first == -1 && last == -1)
 		cstrim = "N0CALL";
 	else if (mid1 == -1 && mid2 == -1)
@@ -1680,7 +1682,24 @@ unsigned int CStreamer::findYSFID(std::string cs, bool showdst)
 	else
 		cstrim = "N0CALL";
 
-	//LogMessage("cstrim=%s",cstrim.c_str());
+	first = m_callsign.find_first_not_of(' ');
+	mid1 = m_callsign.find_last_of('-');
+	mid2 = m_callsign.find_last_of('/');
+	last = m_callsign.find_last_not_of(' ');
+
+	if (mid1 == -1 && mid2 == -1 && first == -1 && last == -1)
+		callsingtrim = "N0CALL";
+	else if (mid1 == -1 && mid2 == -1)
+		callsingtrim = m_callsign.substr(first, (last - first + 1));
+	else if (mid1 > first)
+		callsingtrim = m_callsign.substr(first, (mid1 - first));
+	else if (mid2 > first)
+		callsingtrim = m_callsign.substr(first, (mid2 - first));
+	else
+		callsingtrim = "N0CALL";
+
+	// LogMessage("trimcs=%s",cstrim.c_str());
+	// LogMessage("trimcallsign=%s",callsingtrim.c_str());
 
 	if (m_lookup != NULL) {
 		id = m_lookup->findID(cstrim);
@@ -1689,8 +1708,6 @@ unsigned int CStreamer::findYSFID(std::string cs, bool showdst)
 		// 	dmrpc = true;
 		// else if (m_dmrflco == FLCO_GROUP)
 		// 	dmrpc = false;
-
-		// if (id == 0) LogMessage("Not DMR ID %s->%s found, drooping voice data.",cs.c_str(),cstrim.c_str());
 		// else {
 		// 	if (showdst)
 		// 		LogMessage("DMR ID of %s: %u, DstID: %s%u", cstrim.c_str(), id, dmrpc ? "" : "TG ", m_dstid);
@@ -1698,8 +1715,19 @@ unsigned int CStreamer::findYSFID(std::string cs, bool showdst)
 		// 		LogMessage("DMR ID of %s: %u", cstrim.c_str(), id);
 		// }
 	} else id=0;
+	// LogMessage("id antes=%d",id);
 
-	//LogMessage("id=%d",id);
+	if (id == 0) {
+		if (m_srcHS > 99999999U)
+			m_defsrcid = m_srcHS / 100U;
+		else if (m_srcHS > 9999999U)
+			m_defsrcid = m_srcHS / 10U;
+		else
+			m_defsrcid = m_srcHS;
+		if (strcmp(cstrim.c_str(),callsingtrim.c_str()) == 0) id=m_defsrcid;
+		else LogMessage("Not DMR ID %s->%s found on %s, drooping voice data.",cs.c_str(),cstrim.c_str(),callsingtrim.c_str());
+	}	
+	// LogMessage("id despues=%d",id);
 
 	return id;
 }

@@ -989,8 +989,8 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 				else tglistOpt = 1;
 			} else tglistOpt = reflector->m_opt;
 		
-			// if (reflector != NULL) LogMessage("DMR connection to %s", reflector->m_name.c_str());
-			// else LogMessage("DMR connection to TG%d", dstID);
+			if (reflector != NULL) LogMessage("DMR connection to %s", reflector->m_name.c_str());
+			else LogMessage("DMR connection to TG%d", dstID);
 
 			switch (tglistOpt) {
 				case 0:
@@ -1003,7 +1003,7 @@ bool CYSFGateway::TG_Connect(unsigned int dstID) {
 			
 				case 1:
 					m_ptt_pc = true;
-					m_Streamer->put_dstid(9U);
+					m_Streamer->put_dstid(dstID);
 					m_ptt_dstid = dstID;
 					m_Streamer->put_dmrflco(FLCO_GROUP);
 					//LogMessage("Connect to REF %d has been requested", m_ptt_dstid);
