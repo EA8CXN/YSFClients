@@ -35,11 +35,16 @@
 // #include <time.h>
 
 // DT1 and DT2, suggested by Manuel EA7EE
-const unsigned char dt1_temp[] = {0x31, 0x22, 0x62, 0x5F, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00};
-const unsigned char dt2_temp[] = {0x00, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x1C, 0x20, 0x03, 0x08};
+//const unsigned char dt1_temp[] = {0x31, 0x22, 0x61, 0x5F, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00};
+//const unsigned char dt2_temp[] = {0x00, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x1C, 0x20, 0x03, 0x07};
+const unsigned char dt1_temp[]   = {0x01, 0x22, 0x61, 0x5F, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20};
+const unsigned char dt2_temp[]   = {0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x03, 0xA6};
+//const unsigned char dt1_temp[] = {0x31, 0x22, 0x61, 0x5F, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00};
+//const unsigned char dt2_temp[] = {0x00, 0x00, 0x00, 0x00, 0x6C, 0x20, 0x1C, 0x20, 0x03, 0xFE};
+
 unsigned char m_gps_buffer[20U];
 
-char std_ysf_radioid[] = {'*', '*', '*', '*', '*'};
+char std_ysf_radioid[] = {'F', 'A', 'E', 'o', 'r'};
 char ysf_radioid[5];
 
 CStreamer::CStreamer(CConf *conf) :
@@ -745,7 +750,10 @@ char *CStreamer::get_radio(char c) {
 		break;
 	case 0x31U:
 		::strcpy(radio, "FTM-300D");
-		break;			
+		break;	
+	case 0x33U:
+		::strcpy(radio, "FT-5D");
+		break;					
 	default:
 		::sprintf(radio, "0x%02X", c);
 		break;
@@ -882,9 +890,7 @@ CYSFPayload ysfPayload;
 						}
 					} else strcpy(alien_user,"");
 
-					
-					unsigned char dch[20U];
-					if (payload.readVDMode1Data(buffer+35U,dch)) memcpy(ysf_radioid,dch+5U,5U);
+					if (payload.readVDMode1Data(buffer+35U,dch) && dch[5U]!='*') memcpy(ysf_radioid,dch+5U,5U);
 					else memcpy(ysf_radioid,std_ysf_radioid,5U);
 					// memcpy(tmp,ysf_radioid,5U);
 					// tmp[5U]=0;
@@ -1002,14 +1008,17 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 	static bool start_silence = false;
 	unsigned int fn;
 	unsigned int ysfFrameType;
-
 	std::string tmp_callsign = m_callsign;
-	tmp_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+	std::string m_netDst_str = m_netDst;
+	unsigned char dch[20U];
+	unsigned char csd1[20U], csd2[20U];	
 
 	// YSF Playback 
 	if ((m_ysfWatch.elapsed() > YSF_FRAME_PER) && (m_open_channel || (m_beacon_status!=BE_OFF))) {
 		// Playback YSF
 		::memset(m_ysfFrame,0U,200U);
+		tmp_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
+		m_netDst_str.resize(YSF_CALLSIGN_LENGTH, ' ');		
 		ysfFrameType = m_conv.getYSF(m_ysfFrame + 35U);
 		//if (ysfFrameType != 4) LogMessage("frame type: %d",ysfFrameType);
 		if (ysfFrameType == TAG_BULK) {		
@@ -1033,7 +1042,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_HEADER) {			
 				if (m_beacon_status != BE_OFF) ::memcpy(m_ysfFrame + 4U, tmp_callsign.c_str(), YSF_CALLSIGN_LENGTH);
-				else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
+				else ::memcpy(m_ysfFrame + 4U, m_netDst_str.c_str(), YSF_CALLSIGN_LENGTH);
 				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			} 
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
@@ -1056,8 +1065,6 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			fich.setDGId(m_gid);
 			fich.encode(m_ysfFrame + 35U);
 
-			unsigned char dch[20U];
-			unsigned char csd1[20U], csd2[20U];
 			CYSFPayload payload;
 			if (ysfFrameType == TAG_HEADER) {
 				memset(csd1, '*', YSF_CALLSIGN_LENGTH/2);
@@ -1084,7 +1091,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 					::memcpy(m_ysfFrame + 4U, tmp_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 					m_beacon_status = BE_OFF;
 				}
-				else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
+				else ::memcpy(m_ysfFrame + 4U, m_netDst_str.c_str(), YSF_CALLSIGN_LENGTH);
 				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			}
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
@@ -1107,8 +1114,6 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			fich.setDGId(m_gid);
 			fich.encode(m_ysfFrame + 35U);
 
-			unsigned char dch[20U];
-			unsigned char csd1[20U], csd2[20U];
 			CYSFPayload payload;			
 			if (ysfFrameType == TAG_EOT) {
 				memset(csd1, '*', YSF_CALLSIGN_LENGTH);
@@ -1143,7 +1148,7 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 			::memcpy(m_ysfFrame + 0U, "YSFD", 4U);
 			if (ysfFrameType == TAG_DATA) {			
 				if (m_beacon_status != BE_OFF) ::memcpy(m_ysfFrame + 4U, tmp_callsign.c_str(), YSF_CALLSIGN_LENGTH);
-				else ::memcpy(m_ysfFrame + 4U, m_netDst.c_str(), YSF_CALLSIGN_LENGTH);
+				else ::memcpy(m_ysfFrame + 4U, m_netDst_str.c_str(), YSF_CALLSIGN_LENGTH);
 				::memcpy(m_ysfFrame + 14U, m_real_rcv_callsign.c_str(), YSF_CALLSIGN_LENGTH);
 			}
 			::memcpy(m_ysfFrame + 24U, "ALL       ", YSF_CALLSIGN_LENGTH);
@@ -1155,19 +1160,22 @@ void CStreamer::YSFPlayback(CYSFNetwork *rptNetwork) {
 					switch (fn) {
 						case 0:
 							// ***key
-							unsigned char dch[20U];
 							memset(dch, '*', YSF_CALLSIGN_LENGTH);
 							memcpy(dch + YSF_CALLSIGN_LENGTH/2, ysf_radioid, YSF_CALLSIGN_LENGTH/2);				
 							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
 							break;
 						case 1:
 							//Callsign
-							payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_real_rcv_callsign.c_str());
+							memset(dch, ' ', YSF_CALLSIGN_LENGTH);
+							memcpy(dch,m_real_rcv_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
 							break;
 						case 2:
-							//Callsign
-							if (m_beacon_status != BE_OFF) payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)tmp_callsign.c_str());
-							else payload.writeVDMode2Data(m_ysfFrame + 35U, (const unsigned char*)m_netDst.c_str());
+							//Repeater
+							memset(dch, ' ', YSF_CALLSIGN_LENGTH);
+							if (m_beacon_status != BE_OFF) memcpy(dch,tmp_callsign.c_str(),YSF_CALLSIGN_LENGTH);
+							else memcpy(dch,m_netDst_str.c_str(),strlen(m_netDst_str.c_str()));
+							payload.writeVDMode2Data(m_ysfFrame + 35U, dch);
 							break;							
 						case 5:					
 							if (ysf_radioid[0] != '*') {
@@ -1778,7 +1786,7 @@ std::string CStreamer::getSrcYSF_fromHeader(const unsigned char* buffer) {
 	//  LogMessage("Get from header: %s",rcv_callsign.c_str());	
 	m_real_rcv_callsign = rcv_callsign;	
 	if (isdigit(rcv_callsign.at(0))) {
-		rcv_callsign.erase(0,3);
+		rcv_callsign.erase(0,2);
 	}	
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 	m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');	
@@ -1810,7 +1818,7 @@ std::string CStreamer::getSrcYSF_fromModem(const unsigned char* buffer) {
 	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
 	m_real_rcv_callsign = rcv_callsign;
 	if (isdigit(rcv_callsign.at(0))) {
-		rcv_callsign.erase(0,3);
+		rcv_callsign.erase(0,2);
 	}
 //	m_real_rcv_callsign = rcv_callsign;	
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
@@ -1854,7 +1862,7 @@ std::string CStreamer::getSrcYSF_fromData(const unsigned char* buffer) {
 	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
 	m_real_rcv_callsign = rcv_callsign;
 	if (isdigit(rcv_callsign.at(0))) {
-		rcv_callsign.erase(0,3);
+		rcv_callsign.erase(0,2);
 	}
 //	m_real_rcv_callsign = rcv_callsign;		
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
@@ -1913,7 +1921,7 @@ std::string CStreamer::getSrcYSF_fromFN1(const unsigned char* buffer) {
 	if (rcv_callsign.empty()) rcv_callsign = std::string("UNKNOW");
 	m_real_rcv_callsign = rcv_callsign;	
 	if (isdigit(rcv_callsign.at(0))) {
-		rcv_callsign.erase(0,3);
+		rcv_callsign.erase(0,2);
 	}	
 	rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');
 	m_real_rcv_callsign.resize(YSF_CALLSIGN_LENGTH, ' ');

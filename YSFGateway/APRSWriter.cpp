@@ -164,7 +164,8 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 	case 0x29U:
 	case 0x2AU:
 	case 0x2DU: 	
-	case 0x31U:	
+	case 0x31U:
+	case 0x33U:	
 		symbol = '>';
 		strcpy(suffix, "-9");		
 		break;
