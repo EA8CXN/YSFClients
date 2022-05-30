@@ -175,7 +175,7 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 		break;
 	default:
 		symbol = '-';
-		strcpy(suffix, "-9");		
+		strcpy(suffix, "-2");		
 		break;
 	}
 
