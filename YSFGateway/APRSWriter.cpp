@@ -52,6 +52,7 @@ m_socket(NULL)
 	assert(!password.empty());
 	assert(!address.empty());
 	assert(port > 0U);
+	LogMessage("Starting the APRS Writer thread from APRSWriter.cpp");
 	m_thread = new CAPRSWriterThread(callsign, password, address, port);
 }
 
@@ -89,6 +90,7 @@ void CAPRSWriter::setMobileLocation(const std::string& address, unsigned int por
 
 bool CAPRSWriter::open()
 {
+	LogMessage("Opening GPS Socket in the APRS Writer");
 	if (m_socket != NULL) {
 		bool ret = m_socket->open();
 		if (!ret) {
@@ -164,8 +166,7 @@ void CAPRSWriter::write(const unsigned char* source, const char* type, unsigned 
 	case 0x29U:
 	case 0x2AU:
 	case 0x2DU: 	
-	case 0x31U:
-	case 0x33U:	
+	case 0x31U:	
 		symbol = '>';
 		strcpy(suffix, "-9");		
 		break;
