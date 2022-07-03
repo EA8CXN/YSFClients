@@ -41,8 +41,6 @@ m_socket(address, port),
 m_queue(20U, "APRS Queue"),
 m_exit(false),
 m_connected(false),
-m_reconnectTimer(1000U),
-m_tries(1U),
 m_APRSReadCallback(NULL),
 m_filter(),
 m_clientName("YSFGateway")
@@ -65,8 +63,6 @@ m_socket(address, port),
 m_queue(20U, "APRS Queue"),
 m_exit(false),
 m_connected(false),
-m_reconnectTimer(1000U),
-m_tries(1U),
 m_APRSReadCallback(NULL),
 m_filter(filter),
 m_clientName(clientName)
@@ -96,31 +92,13 @@ bool CAPRSWriterThread::start()
 void CAPRSWriterThread::entry()
 {
 	LogMessage("Starting the APRS Writer thread");
-
-	m_connected = connect();
-
-	if (!m_connected) {
-		LogError("Connect attempt to the APRS server has failed");
-		startReconnectionTimer();
-	}
+	::sleep(1);
+	m_connected = true;
 
 	try {
 		while (!m_exit) {
-			if (!m_connected) {
-				if (m_reconnectTimer.isRunning() && m_reconnectTimer.hasExpired()) {
-					m_reconnectTimer.stop();
-
-				m_connected = connect();
-
-				if (!m_connected){
-					LogError("Reconnect attempt to the APRS server has failed");
-					startReconnectionTimer();
-				}
-			  }
-			}
-
-			if (m_connected) {
-				m_tries = 0U;
+			//LogMessage("Loop the APRS Writer thread");
+			::sleep(1);
 
 				if (!m_queue.isEmpty()){
 					char* p = NULL;
@@ -129,43 +107,34 @@ void CAPRSWriterThread::entry()
 					LogMessage("APRS ==> %s", p);
 
 					::strcat(p, "\r\n");
+				    bool connected = connect();
+
+				 	if (!connected){
+				 		LogError("Connect attempt to the APRS server has failed");
+						continue;
+				 	}
 
 					bool ret = m_socket.write((unsigned char*)p, (unsigned int) ::strlen(p));
 					if (!ret) {
 						m_connected = false;
 						m_socket.close();
-						LogError("Connection to the APRS thread has failed");
-
-						startReconnectionTimer();
+						LogError("Writing to socket APRS Write Thread has failed");
+						continue;						
+						//startReconnectionTimer();
 					}
-
-					delete[] p;
-				}
-				{
 					std::string line;
 					int length = m_socket.readLine(line, APRS_TIMEOUT);
-
-					if (length < 0) {
-						m_connected = false;
-						m_socket.close();
-						LogError("Error when reading from the APRS server");
-
-						startReconnectionTimer();
-					}
-
-					if(length > 0 && line.at(0U) != '#'//check if we have something and if that something is an APRS frame
-					    && m_APRSReadCallback != NULL)//do we have someone wanting an APRS Frame?
+					    if(length > 0 && line.at(0U) != '#' && m_APRSReadCallback != NULL)//do we have someone wanting an APRS Frame?
 					{	
-						//wxLogMessage(wxT("Received APRS Frame : ") + line);
+						LogMessage("Received Sending APRS Frame : %s", line.c_str());
 						m_APRSReadCallback(std::string(line));
 					}
+					
+					m_socket.close();
+					delete[] p;
 				}
 
 			}
-		}
-
-		if (m_connected)
-			m_socket.close();
 
 		while (!m_queue.isEmpty()) {
 			char* p = NULL;
@@ -217,7 +186,6 @@ void CAPRSWriterThread::stop()
 
 void CAPRSWriterThread::clock(unsigned int ms)
 {
-	m_reconnectTimer.clock(ms);
 }
 
 bool CAPRSWriterThread::connect()
@@ -269,15 +237,4 @@ bool CAPRSWriterThread::connect()
 	LogMessage("Connected to the APRS server");
 
 	return true;
-}
-
-void CAPRSWriterThread::startReconnectionTimer()
-{
-	// Clamp at a ten minutes reconnect time
-	m_tries++;
-	if (m_tries > 10U)
-		m_tries = 10U;
-
-	m_reconnectTimer.setTimeout(m_tries * 60U);
-	m_reconnectTimer.start();
 }

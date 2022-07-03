@@ -55,14 +55,11 @@ private:
 	CRingBuffer<char*>     m_queue;
 	bool                   m_exit;
 	bool                   m_connected;
-	CTimer                 m_reconnectTimer;
-	unsigned int           m_tries;	
 	ReadAPRSFrameCallback  m_APRSReadCallback;
 	std::string            m_filter;
 	std::string            m_clientName;
 
 	bool connect();
-	void startReconnectionTimer();
 };
 
 #endif

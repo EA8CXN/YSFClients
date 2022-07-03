@@ -655,16 +655,13 @@ bool CWiresX::NewsForMe(const unsigned char* data, const unsigned int offset) {
 
 bool CWiresX::processNews(const unsigned char* source, const unsigned char* data)
 {
-	if (NewsForMe(data,0U)) {
-		m_busy = true;
-		m_busyTimer.start();
-
-		::LogMessage("Received NEWS for \"%05d\" from %10.10s",m_last_news, source);		
-		m_status = WXSI_NEWS;
-		m_timer.start();
-		return false;
-	}
-	else return true;
+	NewsForMe(data,0U);
+	m_busy = true;
+	m_busyTimer.start();
+	::LogMessage("Received NEWS for \"%05d\" from %10.10s",m_last_news, source);		
+	m_status = WXSI_NEWS;
+	m_timer.start();
+	return false;
 }
 
 bool CWiresX::processListDown(const unsigned char* source, const unsigned char* data)
