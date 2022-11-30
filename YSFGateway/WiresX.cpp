@@ -803,7 +803,9 @@ WX_STATUS CWiresX::processUploadMessage(const unsigned char* source, const unsig
 		m_timer.start();
 		return WXS_UPLOAD;
 	} else {
-		m_sendNetwork = true;		
+		m_sendNetwork = true;
+		::LogMessage("Received DIRECT GM Messagefrom %10.10s", source);
+		m_storage->StoreTextMessage(data,source,gps);
 		return WXS_NONE;
 	}
 }
